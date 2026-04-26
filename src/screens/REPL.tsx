@@ -135,6 +135,7 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from 'src/services/analytics/grow
 import { textForResubmit, handleMessageFromStream, type StreamingToolUse, type StreamingThinking, isCompactBoundaryMessage, getMessagesAfterCompactBoundary, getContentText, createUserMessage, createAssistantMessage, createTurnDurationMessage, createAgentsKilledMessage, createApiMetricsMessage, createSystemMessage, createCommandInputMessage, formatCommandInputTags } from '../utils/messages.js';
 import { getCurrentTurnCacheMetrics, resetCurrentTurn } from '../services/api/cacheStatsTracker.js';
 import { formatCacheMetricsCompact, formatCacheMetricsFull } from '../services/api/cacheMetrics.js';
+import { isBrowserLLMProvider, goToChat } from '../services/api/browserLLMProvider.js';
 import { generateSessionTitle } from '../utils/sessionTitle.js';
 import { BASH_INPUT_TAG, COMMAND_MESSAGE_TAG, COMMAND_NAME_TAG, LOCAL_COMMAND_STDOUT_TAG } from '../constants/xml.js';
 import { escapeXml } from '../utils/xml.js';
@@ -163,6 +164,8 @@ import type { ScopedMcpServerConfig } from '../services/mcp/types.js';
 import { randomUUID, type UUID } from 'crypto';
 import { processSessionStartHooks } from '../utils/sessionStart.js';
 import { executeSessionEndHooks, getSessionEndHookTimeoutMs } from '../utils/hooks.js';
+import { registerCleanup } from '../utils/cleanupRegistry.js';
+import { saveAgentName } from '../utils/sessionStorage.js';
 import { type IDESelection, useIdeSelection } from '../hooks/useIdeSelection.js';
 import { getTools, assembleToolPool } from '../tools.js';
 import type { AgentDefinition } from '../tools/AgentTool/loadAgentsDir.js';
@@ -186,6 +189,7 @@ import type { AgentColorName } from '../tools/AgentTool/agentColorManager.js';
 import { fileHistoryMakeSnapshot, type FileHistoryState, fileHistoryRewind, type FileHistorySnapshot, copyFileHistoryForResume, fileHistoryEnabled, fileHistoryHasAnyChanges } from '../utils/fileHistory.js';
 import { type AttributionState, incrementPromptCount } from '../utils/commitAttribution.js';
 import { recordAttributionSnapshot } from '../utils/sessionStorage.js';
+import { isBrowserLLMProvider, getCurrentChatId } from '../services/api/browserLLMProvider.js';
 import { computeStandaloneAgentContext, restoreAgentFromSession, restoreSessionStateFromLog, restoreWorktreeForResume, exitRestoredWorktree } from '../utils/sessionRestore.js';
 import { isBgSession, updateSessionName, updateSessionActivity } from '../utils/concurrentSessions.js';
 import { isInProcessTeammateTask, type InProcessTeammateTaskState } from '../tasks/InProcessTeammateTask/types.js';
@@ -1966,6 +1970,20 @@ export function REPL({
 
       // Clear input to ensure no residual state
       setInputValue('');
+
+      // Navigate BrowserLLM to the resumed chat if active and agentName is the ChatGPT conversation ID
+      if (isBrowserLLMProvider() && log.agentName) {
+        try {
+          const { goToChat } = await import('../services/api/browserLLMProvider.js');
+          const gotoResult = await goToChat(log.agentName);
+          if (!gotoResult.success) {
+            console.warn('Failed to navigate BrowserLLM to chat:', gotoResult.error);
+          }
+        } catch (error) {
+          console.warn('Error navigating BrowserLLM:', error);
+        }
+      }
+
       logEvent('tengu_session_resumed', {
         entrypoint: entrypoint as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
         success: true,
@@ -3892,6 +3910,26 @@ export function REPL({
 
     // Initial message handling is done via the initialMessage effect
   }
+
+  // Register cleanup to save BrowserLLM chat ID as session identifier on exit
+  useEffect(() => {
+    if (!isBrowserLLMProvider()) return
+
+    const unregister = registerCleanup(async () => {
+      try {
+        const chatId = await getCurrentChatId()
+        if (chatId) {
+          // Save the current ChatGPT conversation ID as the agent name
+          // This becomes the session identifier for resuming with --resume
+          await saveAgentName(getSessionId() as UUID, chatId, undefined, 'auto')
+        }
+      } catch (error) {
+        logError(error)
+      }
+    })
+
+    return () => unregister()
+  }, [])
 
   // Register cost summary tracker
   useCostSummary(useFpsMetrics());
