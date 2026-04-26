@@ -9,6 +9,7 @@ import { isLocalProviderUrl, resolveProviderRequest } from '../services/api/prov
 import { getLocalOpenAICompatibleProviderLabel } from '../utils/providerDiscovery.js'
 import { getSettings_DEPRECATED } from '../utils/settings/settings.js'
 import { parseUserSpecifiedModel } from '../utils/model/model.js'
+import { isBrowserLLMUrl, initBrowserLLMProvider } from '../services/api/browserLLMProvider.js'
 
 declare const MACRO: { VERSION: string; DISPLAY_VERSION?: string }
 
@@ -48,18 +49,18 @@ function paintLine(text: string, stops: RGB[], lineT: number): string {
 // ─── Colors ───────────────────────────────────────────────────────────────────
 
 const SUNSET_GRAD: RGB[] = [
-  [255, 180, 100],
-  [240, 140, 80],
-  [217, 119, 87],
-  [193, 95, 60],
-  [160, 75, 55],
-  [130, 60, 50],
+  [255, 40, 40],   // bright red
+  [220, 20, 20],   // strong red
+  [180, 0, 0],     // deep red
+  [140, 0, 0],     // darker
+  [100, 0, 0],     // near maroon
+  [60, 0, 0],      // almost black red
 ]
 
-const ACCENT: RGB = [240, 148, 100]
+const ACCENT: RGB = [220, 30, 30]
 const CREAM: RGB = [220, 195, 170]
-const DIMCOL: RGB = [120, 100, 82]
-const BORDER: RGB = [100, 80, 65]
+const BORDER: RGB = [100, 0, 0]
+const DIMCOL: RGB = [120, 40, 40]
 
 // ─── Filled Block Text Logo ───────────────────────────────────────────────────
 
@@ -88,6 +89,21 @@ export function detectProvider(): { name: string; model: string; baseUrl: string
   const useGithub = process.env.CLAUDE_CODE_USE_GITHUB === '1' || process.env.CLAUDE_CODE_USE_GITHUB === 'true'
   const useOpenAI = process.env.CLAUDE_CODE_USE_OPENAI === '1' || process.env.CLAUDE_CODE_USE_OPENAI === 'true'
   const useMistral = process.env.CLAUDE_CODE_USE_MISTRAL === '1' || process.env.CLAUDE_CODE_USE_MISTRAL === 'true'
+  const useBrowserLLM = process.env.CLAUDE_CODE_USE_BROWSERLLM === '1' || process.env.CLAUDE_CODE_USE_BROWSERLLM === 'true'
+
+  // Check if OPENAI_BASE_URL is BrowserLLM
+  const openaiBaseUrl = process.env.OPENAI_BASE_URL
+  const isBrowserLLMViaOpenAI = openaiBaseUrl && isBrowserLLMUrl(openaiBaseUrl)
+
+  if (useBrowserLLM || isBrowserLLMViaOpenAI) {
+    const baseUrl = process.env.OPENAI_BASE_URL || 'http://localhost:3579/v1'
+    const model = process.env.OPENAI_MODEL || 'browserllm-model'
+
+    // Initialize the BrowserLLM provider
+    initBrowserLLMProvider(baseUrl.replace('/v1', ''))
+
+    return { name: 'BrowserLLM', model, baseUrl, isLocal: true }
+  }
 
   if (useGemini) {
     const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
@@ -151,13 +167,13 @@ export function detectProvider(): { name: string; model: string; baseUrl: string
     else if (/bankr/i.test(baseUrl)) name = 'Bankr'
     else if (/bankr/i.test(rawModel)) name = 'Bankr'
     else if (isLocal) name = getLocalOpenAICompatibleProviderLabel(baseUrl)
-    
+
     // Resolve model alias to actual model name + reasoning effort
     let displayModel = resolvedRequest.resolvedModel
     if (resolvedRequest.reasoning?.effort) {
       displayModel = `${displayModel} (${resolvedRequest.reasoning.effort})`
     }
-    
+
     return { name, model: displayModel, baseUrl, isLocal }
   }
 
@@ -218,10 +234,10 @@ export function printStartupScreen(): void {
   const provC: RGB = p.isLocal ? [130, 175, 130] : ACCENT
   let [r, l] = lbl('Provider', p.name, provC)
   out.push(boxRow(r, W, l))
-  ;[r, l] = lbl('Model', p.model)
+    ;[r, l] = lbl('Model', p.model)
   out.push(boxRow(r, W, l))
   const ep = p.baseUrl.length > 38 ? p.baseUrl.slice(0, 35) + '...' : p.baseUrl
-  ;[r, l] = lbl('Endpoint', ep)
+    ;[r, l] = lbl('Endpoint', ep)
   out.push(boxRow(r, W, l))
 
   out.push(`${rgb(...BORDER)}\u2560${'\u2550'.repeat(W - 2)}\u2563${RESET}`)
