@@ -24,6 +24,7 @@ export const VALID_PROVIDERS = [
   'ollama',
   'nvidia-nim',
   'minimax',
+  'browserllm',
 ] as const
 
 export type ProviderFlagName = (typeof VALID_PROVIDERS)[number]
@@ -158,6 +159,17 @@ export function applyProviderFlag(
       if (process.env.BNKR_API_KEY && !process.env.OPENAI_API_KEY) {
         process.env.OPENAI_API_KEY = process.env.BNKR_API_KEY
       }
+      break
+
+    case 'browserllm':
+      process.env.CLAUDE_CODE_USE_OPENAI = '1'
+      if (!process.env.OPENAI_BASE_URL) {
+        process.env.OPENAI_BASE_URL = 'http://localhost:3579/v1'
+      }
+      if (!process.env.OPENAI_API_KEY) {
+        process.env.OPENAI_API_KEY = 'browserllm'
+      }
+      if (model) process.env.OPENAI_MODEL = model
       break
   }
 

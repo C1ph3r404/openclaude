@@ -94,28 +94,40 @@ export async function setChatId(chatId: string): Promise<{ success: boolean; err
     }
 
     try {
-        const response = await fetch(`${config.baseUrl}/set-chat-id`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ chatId }),
-        });
+        // Create an AbortController with 30 second timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
+        try {
+            const response = await fetch(`${config.baseUrl}/set-chat-id`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ chatId }),
+                signal: controller.signal,
+            });
+
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                return {
+                    success: false,
+                    error: errorData.message || `HTTP ${response.status}`,
+                };
+            }
+
+            const data = await response.json();
+
             return {
-                success: false,
-                error: errorData.message || `HTTP ${response.status}`,
+                success: data.success ?? true,
+                error: data.message,
             };
+        } catch (fetchError) {
+            clearTimeout(timeoutId);
+            throw fetchError;
         }
-
-        const data = await response.json();
-
-        return {
-            success: data.success ?? true,
-            error: data.message,
-        };
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         return { success: false, error: `Failed to set chat ID: ${errorMessage}` };

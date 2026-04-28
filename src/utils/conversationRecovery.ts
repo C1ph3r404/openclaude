@@ -25,6 +25,22 @@ import {
 } from './fileHistory.js'
 import { logError } from './log.js'
 import { getAPIProvider } from './model/providers.js'
+
+// Helper to log BrowserLLM debug messages to file
+async function debugLog(msg: string) {
+  try {
+    const fs = require('fs')
+    const path = require('path')
+    const debugDir = path.join(process.env.HOME || '/root', '.config', 'claude', 'debug')
+    if (!fs.existsSync(debugDir)) {
+      fs.mkdirSync(debugDir, { recursive: true, mode: 0o700 })
+    }
+    const debugFile = path.join(debugDir, 'debug.log')
+    fs.appendFileSync(debugFile, `[${new Date().toISOString()}] ${msg}\n`, { mode: 0o600 })
+  } catch {
+    // Silently fail if debug logging fails
+  }
+}
 import {
   createAssistantMessage,
   createUserMessage,
@@ -542,6 +558,7 @@ export async function loadConversationForResume(
   fullPath?: string
 } | null> {
   try {
+    debugLog(`[BROWSERLLM] loadConversationForResume: CALLED with source=${typeof source === 'string' ? source : 'LogOption'}`)
     let log: LogOption | null = null
     let messages: Message[] | null = null
     let sessionId: UUID | undefined
@@ -594,8 +611,34 @@ export async function loadConversationForResume(
 
     if (log) {
       // Load full messages for lite logs
-      if (isLiteLog(log)) {
+      const isLite = isLiteLog(log)
+      void debugLog(`[BROWSERLLM] loadConversationForResume: log received, isLiteLog=${isLite}, log.browserLLMConvoId=${log?.browserLLMConvoId}`)
+      if (isLite) {
+        void debugLog(`[BROWSERLLM] loadConversationForResume: calling loadFullLog...`)
         log = await loadFullLog(log)
+        void debugLog(`[BROWSERLLM] loadConversationForResume: after loadFullLog, log.browserLLMConvoId=${log?.browserLLMConvoId}`)
+      } else if (!log.browserLLMConvoId && log.fullPath) {
+        // For non-lite logs, we still need to extract browserLLMConvoId from the transcript
+        void debugLog(`[BROWSERLLM] loadConversationForResume: non-lite log, extracting browserLLMConvoId from file...`)
+        try {
+          const { browserLLMConvoIds } = await loadTranscriptFile(log.fullPath)
+          const sid = getSessionIdFromLog(log) as UUID | undefined
+          let convoId: string | undefined
+          if (sid) {
+            convoId = browserLLMConvoIds.get(sid)
+          }
+          // If not found by sessionId, try any entry in the map
+          if (!convoId && browserLLMConvoIds.size > 0) {
+            convoId = Array.from(browserLLMConvoIds.values())[0]
+            void debugLog(`[BROWSERLLM] loadConversationForResume: Using first map entry: ${convoId}`)
+          }
+          if (convoId) {
+            log = { ...log, browserLLMConvoId: convoId }
+            void debugLog(`[BROWSERLLM] loadConversationForResume: Extracted browserLLMConvoId=${convoId}`)
+          }
+        } catch (err) {
+          void debugLog(`[BROWSERLLM] loadConversationForResume: Error extracting browserLLMConvoId: ${err}`)
+        }
       }
 
       // Determine sessionId first so we can pass it to copy functions
@@ -634,7 +677,7 @@ export async function loadConversationForResume(
     messages.push(...hookMessages)
     assertResumeMessageSize(messages)
 
-    return {
+    const result = {
       messages,
       turnInterruptionState: deserialized.turnInterruptionState,
       fileHistorySnapshots: log?.fileHistorySnapshots,
@@ -658,6 +701,8 @@ export async function loadConversationForResume(
       // Include full path for cross-directory resume
       fullPath: log?.fullPath,
     }
+    debugLog(`[BROWSERLLM] loadConversationForResume: returning browserLLMConvoId=${result.browserLLMConvoId}`)
+    return result
   } catch (error) {
     logError(error as Error)
     throw error
