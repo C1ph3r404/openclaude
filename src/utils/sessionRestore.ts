@@ -126,7 +126,7 @@ export function restoreSessionStateFromLog(
   // commits would leave the prior session's stale commit log intact.
   if (feature('CONTEXT_COLLAPSE')) {
     /* eslint-disable @typescript-eslint/no-require-imports */
-    ;(
+    ; (
       require('../services/contextCollapse/persist.js') as typeof import('../services/contextCollapse/persist.js')
     ).restoreFromEntries(
       result.contextCollapseCommits ?? [],
@@ -312,6 +312,7 @@ type ResumeLoadResult = {
   prNumber?: number
   prUrl?: string
   prRepository?: string
+  browserLLMConvoId?: string
 }
 
 /**
@@ -448,6 +449,21 @@ export async function processResumedConversation(
       await renameRecordingForSession()
       await resetSessionFilePointer()
       restoreCostStateForSession(sid)
+
+      // If resuming with BrowserLLM and we have a saved conversation ID,
+      // switch to that conversation in BrowserLLM
+      if (result.browserLLMConvoId) {
+        void (async () => {
+          try {
+            const { isBrowserLLMProvider, setChatId } = await import('../services/api/browserLLMProvider.js')
+            if (isBrowserLLMProvider()) {
+              await setChatId(result.browserLLMConvoId!)
+            }
+          } catch (error) {
+            // Silently ignore import or execution errors
+          }
+        })()
+      }
     }
   } else if (result.contentReplacements?.length) {
     // --fork-session keeps the fresh startup session ID. useLogMessages will
@@ -493,7 +509,7 @@ export async function processResumedConversation(
   // — see the restoreSessionStateFromLog callsite above for why.
   if (feature('CONTEXT_COLLAPSE')) {
     /* eslint-disable @typescript-eslint/no-require-imports */
-    ;(
+    ; (
       require('../services/contextCollapse/persist.js') as typeof import('../services/contextCollapse/persist.js')
     ).restoreFromEntries(
       result.contextCollapseCommits ?? [],

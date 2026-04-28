@@ -47,6 +47,7 @@ export type LogOption = {
   prNumber?: number // GitHub PR number linked to this session
   prUrl?: string // Full URL to the linked PR
   prRepository?: string // Repository in "owner/repo" format
+  browserLLMConvoId?: string // BrowserLLM ChatGPT conversation ID
   mode?: 'coordinator' | 'normal' // Session mode for coordinator/normal detection
   worktreeSession?: PersistedWorktreeSession | null // Worktree state at session end (null = exited, undefined = never entered)
   contentReplacements?: ContentReplacementRecord[] // Replacement decisions for resume reconstruction
@@ -294,6 +295,16 @@ export type ContextCollapseSnapshotEntry = {
   lastSpawnTokens: number
 }
 
+/**
+ * BrowserLLM conversation ID entry. Stores the ChatGPT conversation ID
+ * for sessions using BrowserLLM provider, enabling chat resumption.
+ */
+export type BrowserLLMConvoIdEntry = {
+  type: 'browserllm-convo-id'
+  sessionId: UUID
+  convoId: string
+}
+
 export type Entry =
   | TranscriptMessage
   | SummaryMessage
@@ -315,6 +326,7 @@ export type Entry =
   | ContentReplacementEntry
   | ContextCollapseCommitEntry
   | ContextCollapseSnapshotEntry
+  | BrowserLLMConvoIdEntry
 
 export function sortLogs(logs: LogOption[]): LogOption[] {
   return logs.sort((a, b) => {

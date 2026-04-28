@@ -85,6 +85,42 @@ export async function deleteChat(): Promise<{ success: boolean; error?: string }
     }
 }
 
+/**
+ * Set the chat ID to resume a specific ChatGPT conversation
+ */
+export async function setChatId(chatId: string): Promise<{ success: boolean; error?: string }> {
+    if (!config) {
+        return { success: false, error: 'BrowserLLM provider not initialized' };
+    }
+
+    try {
+        const response = await fetch(`${config.baseUrl}/set-chat-id`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ chatId }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            return {
+                success: false,
+                error: errorData.message || `HTTP ${response.status}`,
+            };
+        }
+
+        const data = await response.json();
+
+        return {
+            success: data.success ?? true,
+            error: data.message,
+        };
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return { success: false, error: `Failed to set chat ID: ${errorMessage}` };
+    }
+}
 
 /**
  * Check if we're using BrowserLLM provider

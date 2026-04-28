@@ -545,6 +545,7 @@ class Project {
   currentSessionPrNumber: number | undefined
   currentSessionPrUrl: string | undefined
   currentSessionPrRepository: string | undefined
+  currentSessionBrowserLLMConvoId: string | undefined
 
   sessionFile: string | null = null
   // Entries buffered while sessionFile is null. Flushed by materializeSessionFile
@@ -567,7 +568,7 @@ class Project {
   private FLUSH_INTERVAL_MS = 100
   private readonly MAX_CHUNK_BYTES = 100 * 1024 * 1024
 
-  constructor() {}
+  constructor() { }
 
   /** @internal Reset flush/queue state for testing. */
   _resetFlushState(): void {
@@ -1417,6 +1418,7 @@ export async function recordTranscript(
   const newMessages: typeof cleanedMessages = []
   let startingParentUuid: UUID | undefined = startingParentUuidHint
   let seenNewMessage = false
+  const wasSessionEmpty = messageSet.size === 0
   for (const m of cleanedMessages) {
     if (messageSet.has(m.uuid as UUID)) {
       // Only track skipped messages that form a prefix. After compaction,
@@ -1438,6 +1440,28 @@ export async function recordTranscript(
       teamInfo,
     )
   }
+
+  // Save BrowserLLM conversation ID after first assistant message in a fresh session
+  if (
+    wasSessionEmpty &&
+    newMessages.some(m => m.type === 'assistant') &&
+    !getProject().currentSessionBrowserLLMConvoId
+  ) {
+    void (async () => {
+      try {
+        const { isBrowserLLMProvider, getCurrentChatId } = await import('../services/api/browserLLMProvider.js')
+        if (isBrowserLLMProvider()) {
+          const chatId = await getCurrentChatId()
+          if (chatId) {
+            saveBrowserLLMConvoId(chatId)
+          }
+        }
+      } catch (error) {
+        // Silently ignore import or execution errors
+      }
+    })()
+  }
+
   // Return the last ACTUALLY recorded chain-participant's UUID, OR the
   // prefix-tracked UUID if no new chain participants were recorded. This lets
   // callers (useLogMessages) maintain the correct parent chain even when the
@@ -3132,6 +3156,23 @@ export function saveMode(mode: 'coordinator' | 'normal'): void {
 }
 
 /**
+ * Save BrowserLLM conversation ID for session resume.
+ * Used when a session was running with BrowserLLM provider to persist
+ * the ChatGPT conversation ID so it can be resumed later.
+ */
+export function saveBrowserLLMConvoId(convoId: string): void {
+  const sessionId = getSessionId() as UUID
+  if (!sessionId) return
+  appendEntryToFile(getTranscriptPathForSession(sessionId), {
+    type: 'browserllm-convo-id',
+    sessionId,
+    convoId,
+  })
+  // Cache for current session so reAppendSessionMetadata can re-write
+  getProject().currentSessionBrowserLLMConvoId = convoId
+}
+
+/**
  * Record the session's worktree state for --resume. Written to disk by
  * materializeSessionFile on the first user message and re-stamped by
  * reAppendSessionMetadata on exit. Pass null when exiting a worktree
@@ -3145,16 +3186,16 @@ export function saveWorktreeState(
   // allows this, but we don't want them serialized to the transcript.
   const stripped: PersistedWorktreeSession | null = worktreeSession
     ? {
-        originalCwd: worktreeSession.originalCwd,
-        worktreePath: worktreeSession.worktreePath,
-        worktreeName: worktreeSession.worktreeName,
-        worktreeBranch: worktreeSession.worktreeBranch,
-        originalBranch: worktreeSession.originalBranch,
-        originalHeadCommit: worktreeSession.originalHeadCommit,
-        sessionId: worktreeSession.sessionId,
-        tmuxSessionName: worktreeSession.tmuxSessionName,
-        hookBased: worktreeSession.hookBased,
-      }
+      originalCwd: worktreeSession.originalCwd,
+      worktreePath: worktreeSession.worktreePath,
+      worktreeName: worktreeSession.worktreeName,
+      worktreeBranch: worktreeSession.worktreeBranch,
+      originalBranch: worktreeSession.originalBranch,
+      originalHeadCommit: worktreeSession.originalHeadCommit,
+      sessionId: worktreeSession.sessionId,
+      tmuxSessionName: worktreeSession.tmuxSessionName,
+      hookBased: worktreeSession.hookBased,
+    }
     : null
   const project = getProject()
   project.currentSessionWorktree = stripped
@@ -3607,7 +3648,7 @@ function walkChainBeforeParse(buf: Buffer): Buffer {
       let suffix0 = -1
       let suffixN: number[] | undefined
       let from = pos
-      for (;;) {
+      for (; ;) {
         const next = buf.indexOf(UUID_KEY, from)
         if (next < 0 || next >= lineEnd) break
         if (firstAny < 0) firstAny = next
@@ -3842,28 +3883,28 @@ export async function loadTranscriptFile(
       forEachParsedJSONLBufferEntry<Entry>(
         Buffer.from(metadataLines.join('\n')),
         entry => {
-        if (entry.type === 'summary' && entry.leafUuid) {
-          summaries.set(entry.leafUuid, entry.summary)
-        } else if (entry.type === 'custom-title' && entry.sessionId) {
-          customTitles.set(entry.sessionId, entry.customTitle)
-        } else if (entry.type === 'tag' && entry.sessionId) {
-          tags.set(entry.sessionId, entry.tag)
-        } else if (entry.type === 'agent-name' && entry.sessionId) {
-          agentNames.set(entry.sessionId, entry.agentName)
-        } else if (entry.type === 'agent-color' && entry.sessionId) {
-          agentColors.set(entry.sessionId, entry.agentColor)
-        } else if (entry.type === 'agent-setting' && entry.sessionId) {
-          agentSettings.set(entry.sessionId, entry.agentSetting)
-        } else if (entry.type === 'mode' && entry.sessionId) {
-          modes.set(entry.sessionId, entry.mode)
-        } else if (entry.type === 'worktree-state' && entry.sessionId) {
-          worktreeStates.set(entry.sessionId, entry.worktreeSession)
-        } else if (entry.type === 'pr-link' && entry.sessionId) {
-          prNumbers.set(entry.sessionId, entry.prNumber)
-          prUrls.set(entry.sessionId, entry.prUrl)
-          prRepositories.set(entry.sessionId, entry.prRepository)
-        }
-      })
+          if (entry.type === 'summary' && entry.leafUuid) {
+            summaries.set(entry.leafUuid, entry.summary)
+          } else if (entry.type === 'custom-title' && entry.sessionId) {
+            customTitles.set(entry.sessionId, entry.customTitle)
+          } else if (entry.type === 'tag' && entry.sessionId) {
+            tags.set(entry.sessionId, entry.tag)
+          } else if (entry.type === 'agent-name' && entry.sessionId) {
+            agentNames.set(entry.sessionId, entry.agentName)
+          } else if (entry.type === 'agent-color' && entry.sessionId) {
+            agentColors.set(entry.sessionId, entry.agentColor)
+          } else if (entry.type === 'agent-setting' && entry.sessionId) {
+            agentSettings.set(entry.sessionId, entry.agentSetting)
+          } else if (entry.type === 'mode' && entry.sessionId) {
+            modes.set(entry.sessionId, entry.mode)
+          } else if (entry.type === 'worktree-state' && entry.sessionId) {
+            worktreeStates.set(entry.sessionId, entry.worktreeSession)
+          } else if (entry.type === 'pr-link' && entry.sessionId) {
+            prNumbers.set(entry.sessionId, entry.prNumber)
+            prUrls.set(entry.sessionId, entry.prUrl)
+            prRepositories.set(entry.sessionId, entry.prRepository)
+          }
+        })
     }
 
     // Bridge map for legacy progress entries: progress_uuid → progress_parent_uuid.
@@ -4661,8 +4702,8 @@ function transformMessagesForExternalTranscript(
       )
       const filtered = hasRepl
         ? content.filter(
-            b => !(b.type === 'tool_use' && b.name === REPL_TOOL_NAME),
-          )
+          b => !(b.type === 'tool_use' && b.name === REPL_TOOL_NAME),
+        )
         : content
       if (filtered.length === 0) return []
       if (m.isVirtual) {
@@ -4681,8 +4722,8 @@ function transformMessagesForExternalTranscript(
       )
       const filtered = hasRepl
         ? content.filter(
-            b => !(b.type === 'tool_result' && replIds.has(b.tool_use_id)),
-          )
+          b => !(b.type === 'tool_result' && replIds.has(b.tool_use_id)),
+        )
         : content
       if (filtered.length === 0) return []
       if (m.isVirtual) {
@@ -4710,9 +4751,9 @@ export function cleanMessagesForLogging(
   const filtered = messages.filter(isLoggableMessage) as Transcript
   return getUserType() !== 'ant'
     ? transformMessagesForExternalTranscript(
-        filtered,
-        collectReplIds(allMessages),
-      )
+      filtered,
+      collectReplIds(allMessages),
+    )
     : filtered
 }
 

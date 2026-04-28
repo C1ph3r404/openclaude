@@ -57,19 +57,19 @@ import type { ContentReplacementRecord } from './toolResultStorage.js'
 const BRIEF_TOOL_NAME: string | null =
   feature('KAIROS') || feature('KAIROS_BRIEF')
     ? (
-        require('../tools/BriefTool/prompt.js') as typeof import('../tools/BriefTool/prompt.js')
-      ).BRIEF_TOOL_NAME
+      require('../tools/BriefTool/prompt.js') as typeof import('../tools/BriefTool/prompt.js')
+    ).BRIEF_TOOL_NAME
     : null
 const LEGACY_BRIEF_TOOL_NAME: string | null =
   feature('KAIROS') || feature('KAIROS_BRIEF')
     ? (
-        require('../tools/BriefTool/prompt.js') as typeof import('../tools/BriefTool/prompt.js')
-      ).LEGACY_BRIEF_TOOL_NAME
+      require('../tools/BriefTool/prompt.js') as typeof import('../tools/BriefTool/prompt.js')
+    ).LEGACY_BRIEF_TOOL_NAME
     : null
 const SEND_USER_FILE_TOOL_NAME: string | null = feature('KAIROS')
   ? (
-      require('../tools/SendUserFileTool/prompt.js') as typeof import('../tools/SendUserFileTool/prompt.js')
-    ).SEND_USER_FILE_TOOL_NAME
+    require('../tools/SendUserFileTool/prompt.js') as typeof import('../tools/SendUserFileTool/prompt.js')
+  ).SEND_USER_FILE_TOOL_NAME
   : null
 /* eslint-enable @typescript-eslint/no-require-imports */
 
@@ -537,7 +537,8 @@ export async function loadConversationForResume(
   prNumber?: number
   prUrl?: string
   prRepository?: string
-  // Full path to the session file (for cross-directory resume)
+  browserLLMConvoId?: string
+  // Full path to the session file (for cross-directory resume
   fullPath?: string
 } | null> {
   try {
@@ -653,6 +654,7 @@ export async function loadConversationForResume(
       prNumber: log?.prNumber,
       prUrl: log?.prUrl,
       prRepository: log?.prRepository,
+      browserLLMConvoId: log?.browserLLMConvoId,
       // Include full path for cross-directory resume
       fullPath: log?.fullPath,
     }
