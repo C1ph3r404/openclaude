@@ -872,7 +872,7 @@ function repairPossiblyTruncatedObjectJson(raw: string): string | null {
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
           return repaired
         }
-      } catch {}
+      } catch { }
     }
     return null
   }
@@ -1009,239 +1009,50 @@ async function* openaiStreamToAnthropic(
       buffer = lines.pop() ?? ''
 
       for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed === 'data: [DONE]') continue
-      if (!trimmed.startsWith('data: ')) continue
+        const trimmed = line.trim()
+        if (!trimmed || trimmed === 'data: [DONE]') continue
+        if (!trimmed.startsWith('data: ')) continue
 
-      let chunk: OpenAIStreamChunk
-      try {
-        chunk = JSON.parse(trimmed.slice(6))
-      } catch {
-        continue
-      }
-
-      const chunkUsage = convertChunkUsage(chunk.usage)
-
-      for (const choice of chunk.choices ?? []) {
-        const delta = choice.delta
-
-        // Reasoning models (e.g. GLM-5, DeepSeek) may stream chain-of-thought
-        // in `reasoning_content` before the actual reply appears in `content`.
-        // Emit reasoning as a thinking block and content as a text block.
-        if (delta.reasoning_content != null && delta.reasoning_content !== '') {
-          if (!hasEmittedThinkingStart) {
-            yield {
-              type: 'content_block_start',
-              index: contentBlockIndex,
-              content_block: { type: 'thinking', thinking: '' },
-            }
-            hasEmittedThinkingStart = true
-          }
-          yield {
-            type: 'content_block_delta',
-            index: contentBlockIndex,
-            delta: { type: 'thinking_delta', thinking: delta.reasoning_content },
-          }
+        let chunk: OpenAIStreamChunk
+        try {
+          chunk = JSON.parse(trimmed.slice(6))
+        } catch {
+          continue
         }
 
-        // Text content — use != null to distinguish absent field from empty string,
-        // some providers send "" as first delta to signal streaming start
-        if (delta.content != null && delta.content !== '') {
-          // Close thinking block if transitioning from reasoning to content
-          if (hasEmittedThinkingStart && !hasClosedThinking) {
-            yield { type: 'content_block_stop', index: contentBlockIndex }
-            contentBlockIndex++
-            hasClosedThinking = true
-          }
-          if (!hasEmittedContentStart) {
-            yield {
-              type: 'content_block_start',
-              index: contentBlockIndex,
-              content_block: { type: 'text', text: '' },
-            }
-            hasEmittedContentStart = true
-          }
+        const chunkUsage = convertChunkUsage(chunk.usage)
 
-          const visible = thinkFilter.feed(delta.content)
-          if (visible) {
+        for (const choice of chunk.choices ?? []) {
+          const delta = choice.delta
+
+          // Reasoning models (e.g. GLM-5, DeepSeek) may stream chain-of-thought
+          // in `reasoning_content` before the actual reply appears in `content`.
+          // Emit reasoning as a thinking block and content as a text block.
+          if (delta.reasoning_content != null && delta.reasoning_content !== '') {
+            if (!hasEmittedThinkingStart) {
+              yield {
+                type: 'content_block_start',
+                index: contentBlockIndex,
+                content_block: { type: 'thinking', thinking: '' },
+              }
+              hasEmittedThinkingStart = true
+            }
             yield {
               type: 'content_block_delta',
               index: contentBlockIndex,
-              delta: { type: 'text_delta', text: visible },
+              delta: { type: 'thinking_delta', thinking: delta.reasoning_content },
             }
           }
-          processStreamChunk(streamState, delta.content)
-        }
 
-        // Tool calls
-        if (delta.tool_calls) {
-          for (const tc of delta.tool_calls) {
-            if (tc.id && tc.function?.name) {
-              // New tool call starting — close any open thinking block first
-              if (hasEmittedThinkingStart && !hasClosedThinking) {
-                yield { type: 'content_block_stop', index: contentBlockIndex }
-                contentBlockIndex++
-                hasClosedThinking = true
-              }
-              if (hasEmittedContentStart) {
-                yield* closeActiveContentBlock()
-              }
-
-              const toolBlockIndex = contentBlockIndex
-              const initialArguments = tc.function.arguments ?? ''
-              const normalizeAtStop = hasToolFieldMapping(tc.function.name)
-              processStreamChunk(streamState, tc.function.arguments ?? '')
-              activeToolCalls.set(tc.index, {
-                id: tc.id,
-                name: tc.function.name,
-                index: toolBlockIndex,
-                jsonBuffer: initialArguments,
-                normalizeAtStop,
-              })
-
-              yield {
-                type: 'content_block_start',
-                index: toolBlockIndex,
-                content_block: {
-                  type: 'tool_use',
-                  id: tc.id,
-                  name: tc.function.name,
-                  input: {},
-                  ...(tc.extra_content ? { extra_content: tc.extra_content } : {}),
-                  // Extract Gemini signature from extra_content
-                  ...((tc.extra_content?.google as any)?.thought_signature
-                    ? {
-                        signature: (tc.extra_content.google as any)
-                          .thought_signature,
-                      }
-                    : {}),
-                },
-              }
+          // Text content — use != null to distinguish absent field from empty string,
+          // some providers send "" as first delta to signal streaming start
+          if (delta.content != null && delta.content !== '') {
+            // Close thinking block if transitioning from reasoning to content
+            if (hasEmittedThinkingStart && !hasClosedThinking) {
+              yield { type: 'content_block_stop', index: contentBlockIndex }
               contentBlockIndex++
-
-              // Emit any initial arguments
-              if (tc.function.arguments && !normalizeAtStop) {
-                yield {
-                  type: 'content_block_delta',
-                  index: toolBlockIndex,
-                  delta: {
-                    type: 'input_json_delta',
-                    partial_json: tc.function.arguments,
-                  },
-                }
-              }
-            } else if (tc.function?.arguments) {
-              // Continuation of existing tool call
-              const active = activeToolCalls.get(tc.index)
-              if (active) {
-                if (tc.function.arguments) {
-                  active.jsonBuffer += tc.function.arguments
-                }
-
-                if (active.normalizeAtStop) {
-                  continue
-                }
-
-                yield {
-                  type: 'content_block_delta',
-                  index: active.index,
-                  delta: {
-                    type: 'input_json_delta',
-                    partial_json: tc.function.arguments,
-                  },
-                }
-              }
+              hasClosedThinking = true
             }
-          }
-        }
-
-        // Finish — guard ensures we only process finish_reason once even if
-        // multiple chunks arrive with finish_reason set (some providers do this)
-        if (choice.finish_reason && !hasProcessedFinishReason) {
-          hasProcessedFinishReason = true
-
-          // Close any open thinking block that wasn't closed by content transition
-          if (hasEmittedThinkingStart && !hasClosedThinking) {
-            yield { type: 'content_block_stop', index: contentBlockIndex }
-            contentBlockIndex++
-            hasClosedThinking = true
-          }
-          // Close any open content blocks
-          if (hasEmittedContentStart) {
-            yield* closeActiveContentBlock()
-          }
-          // Close active tool calls
-          for (const [, tc] of activeToolCalls) {
-            if (tc.normalizeAtStop) {
-              let partialJson: string
-              if (choice.finish_reason === 'length') {
-                // Truncated by max tokens — preserve raw buffer to avoid
-                // turning an incomplete tool call into an executable command
-                partialJson = tc.jsonBuffer
-              } else {
-                const repairedStructuredJson = repairPossiblyTruncatedObjectJson(
-                  tc.jsonBuffer,
-                )
-                if (repairedStructuredJson) {
-                  partialJson = repairedStructuredJson
-                } else {
-                  partialJson = JSON.stringify(
-                    normalizeToolArguments(tc.name, tc.jsonBuffer),
-                  )
-                }
-              }
-
-              yield {
-                type: 'content_block_delta',
-                index: tc.index,
-                delta: {
-                  type: 'input_json_delta',
-                  partial_json: partialJson,
-                },
-              }
-              yield { type: 'content_block_stop', index: tc.index }
-              continue
-            }
-
-            let suffixToAdd = ''
-            if (tc.jsonBuffer) {
-              try {
-                JSON.parse(tc.jsonBuffer)
-              } catch {
-                const str = tc.jsonBuffer.trimEnd()
-                for (const combo of JSON_REPAIR_SUFFIXES) {
-                  try {
-                    JSON.parse(str + combo)
-                    suffixToAdd = combo
-                    break
-                  } catch {}
-                }
-              }
-            }
-
-            if (suffixToAdd) {
-              yield {
-                type: 'content_block_delta',
-                index: tc.index,
-                delta: {
-                  type: 'input_json_delta',
-                  partial_json: suffixToAdd,
-                },
-              }
-            }
-
-            yield { type: 'content_block_stop', index: tc.index }
-          }
-
-          const stopReason =
-            choice.finish_reason === 'tool_calls'
-              ? 'tool_use'
-              : choice.finish_reason === 'length'
-                ? 'max_tokens'
-                : 'end_turn'
-          if (choice.finish_reason === 'content_filter' || choice.finish_reason === 'safety') {
-            // Gemini/Azure content safety filter blocked the response.
-            // Emit a visible text block so the user knows why output was truncated.
             if (!hasEmittedContentStart) {
               yield {
                 type: 'content_block_start',
@@ -1250,39 +1061,228 @@ async function* openaiStreamToAnthropic(
               }
               hasEmittedContentStart = true
             }
-            yield {
-              type: 'content_block_delta',
-              index: contentBlockIndex,
-              delta: { type: 'text_delta', text: '\n\n[Content blocked by provider safety filter]' },
+
+            const visible = thinkFilter.feed(delta.content)
+            if (visible) {
+              yield {
+                type: 'content_block_delta',
+                index: contentBlockIndex,
+                delta: { type: 'text_delta', text: visible },
+              }
+            }
+            processStreamChunk(streamState, delta.content)
+          }
+
+          // Tool calls
+          if (delta.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              if (tc.id && tc.function?.name) {
+                // New tool call starting — close any open thinking block first
+                if (hasEmittedThinkingStart && !hasClosedThinking) {
+                  yield { type: 'content_block_stop', index: contentBlockIndex }
+                  contentBlockIndex++
+                  hasClosedThinking = true
+                }
+                if (hasEmittedContentStart) {
+                  yield* closeActiveContentBlock()
+                }
+
+                const toolBlockIndex = contentBlockIndex
+                const initialArguments = tc.function.arguments ?? ''
+                const normalizeAtStop = hasToolFieldMapping(tc.function.name)
+                processStreamChunk(streamState, tc.function.arguments ?? '')
+                activeToolCalls.set(tc.index, {
+                  id: tc.id,
+                  name: tc.function.name,
+                  index: toolBlockIndex,
+                  jsonBuffer: initialArguments,
+                  normalizeAtStop,
+                })
+
+                yield {
+                  type: 'content_block_start',
+                  index: toolBlockIndex,
+                  content_block: {
+                    type: 'tool_use',
+                    id: tc.id,
+                    name: tc.function.name,
+                    input: {},
+                    ...(tc.extra_content ? { extra_content: tc.extra_content } : {}),
+                    // Extract Gemini signature from extra_content
+                    ...((tc.extra_content?.google as any)?.thought_signature
+                      ? {
+                        signature: (tc.extra_content.google as any)
+                          .thought_signature,
+                      }
+                      : {}),
+                  },
+                }
+                contentBlockIndex++
+
+                // Emit any initial arguments
+                if (tc.function.arguments && !normalizeAtStop) {
+                  yield {
+                    type: 'content_block_delta',
+                    index: toolBlockIndex,
+                    delta: {
+                      type: 'input_json_delta',
+                      partial_json: tc.function.arguments,
+                    },
+                  }
+                }
+              } else if (tc.function?.arguments) {
+                // Continuation of existing tool call
+                const active = activeToolCalls.get(tc.index)
+                if (active) {
+                  if (tc.function.arguments) {
+                    active.jsonBuffer += tc.function.arguments
+                  }
+
+                  if (active.normalizeAtStop) {
+                    continue
+                  }
+
+                  yield {
+                    type: 'content_block_delta',
+                    index: active.index,
+                    delta: {
+                      type: 'input_json_delta',
+                      partial_json: tc.function.arguments,
+                    },
+                  }
+                }
+              }
             }
           }
-          lastStopReason = stopReason
 
+          // Finish — guard ensures we only process finish_reason once even if
+          // multiple chunks arrive with finish_reason set (some providers do this)
+          if (choice.finish_reason && !hasProcessedFinishReason) {
+            hasProcessedFinishReason = true
+
+            // Close any open thinking block that wasn't closed by content transition
+            if (hasEmittedThinkingStart && !hasClosedThinking) {
+              yield { type: 'content_block_stop', index: contentBlockIndex }
+              contentBlockIndex++
+              hasClosedThinking = true
+            }
+            // Close any open content blocks
+            if (hasEmittedContentStart) {
+              yield* closeActiveContentBlock()
+            }
+            // Close active tool calls
+            for (const [, tc] of activeToolCalls) {
+              if (tc.normalizeAtStop) {
+                let partialJson: string
+                if (choice.finish_reason === 'length') {
+                  // Truncated by max tokens — preserve raw buffer to avoid
+                  // turning an incomplete tool call into an executable command
+                  partialJson = tc.jsonBuffer
+                } else {
+                  const repairedStructuredJson = repairPossiblyTruncatedObjectJson(
+                    tc.jsonBuffer,
+                  )
+                  if (repairedStructuredJson) {
+                    partialJson = repairedStructuredJson
+                  } else {
+                    partialJson = JSON.stringify(
+                      normalizeToolArguments(tc.name, tc.jsonBuffer),
+                    )
+                  }
+                }
+
+                yield {
+                  type: 'content_block_delta',
+                  index: tc.index,
+                  delta: {
+                    type: 'input_json_delta',
+                    partial_json: partialJson,
+                  },
+                }
+                yield { type: 'content_block_stop', index: tc.index }
+                continue
+              }
+
+              let suffixToAdd = ''
+              if (tc.jsonBuffer) {
+                try {
+                  JSON.parse(tc.jsonBuffer)
+                } catch {
+                  const str = tc.jsonBuffer.trimEnd()
+                  for (const combo of JSON_REPAIR_SUFFIXES) {
+                    try {
+                      JSON.parse(str + combo)
+                      suffixToAdd = combo
+                      break
+                    } catch { }
+                  }
+                }
+              }
+
+              if (suffixToAdd) {
+                yield {
+                  type: 'content_block_delta',
+                  index: tc.index,
+                  delta: {
+                    type: 'input_json_delta',
+                    partial_json: suffixToAdd,
+                  },
+                }
+              }
+
+              yield { type: 'content_block_stop', index: tc.index }
+            }
+
+            const stopReason =
+              choice.finish_reason === 'tool_calls'
+                ? 'tool_use'
+                : choice.finish_reason === 'length'
+                  ? 'max_tokens'
+                  : 'end_turn'
+            if (choice.finish_reason === 'content_filter' || choice.finish_reason === 'safety') {
+              // Gemini/Azure content safety filter blocked the response.
+              // Emit a visible text block so the user knows why output was truncated.
+              if (!hasEmittedContentStart) {
+                yield {
+                  type: 'content_block_start',
+                  index: contentBlockIndex,
+                  content_block: { type: 'text', text: '' },
+                }
+                hasEmittedContentStart = true
+              }
+              yield {
+                type: 'content_block_delta',
+                index: contentBlockIndex,
+                delta: { type: 'text_delta', text: '\n\n[Content blocked by provider safety filter]' },
+              }
+            }
+            lastStopReason = stopReason
+
+            yield {
+              type: 'message_delta',
+              delta: { stop_reason: stopReason, stop_sequence: null },
+              ...(chunkUsage ? { usage: chunkUsage } : {}),
+            }
+            if (chunkUsage) {
+              hasEmittedFinalUsage = true
+            }
+          }
+        }
+
+        if (
+          !hasEmittedFinalUsage &&
+          chunkUsage &&
+          (chunk.choices?.length ?? 0) === 0 &&
+          lastStopReason !== null
+        ) {
           yield {
             type: 'message_delta',
-            delta: { stop_reason: stopReason, stop_sequence: null },
-            ...(chunkUsage ? { usage: chunkUsage } : {}),
+            delta: { stop_reason: lastStopReason, stop_sequence: null },
+            usage: chunkUsage,
           }
-          if (chunkUsage) {
-            hasEmittedFinalUsage = true
-          }
+          hasEmittedFinalUsage = true
         }
       }
-
-      if (
-        !hasEmittedFinalUsage &&
-        chunkUsage &&
-        (chunk.choices?.length ?? 0) === 0 &&
-        lastStopReason !== null
-      ) {
-        yield {
-          type: 'message_delta',
-          delta: { stop_reason: lastStopReason, stop_sequence: null },
-          usage: chunkUsage,
-        }
-        hasEmittedFinalUsage = true
-      }
-    }
     }
   } finally {
     reader.releaseLock()
@@ -1822,9 +1822,9 @@ class OpenAIShimMessages {
     let response: Response | undefined
     const provider = request.baseUrl.includes('nvidia') ? 'nvidia-nim'
       : request.baseUrl.includes('minimax') ? 'minimax'
-      : request.baseUrl.includes('localhost:11434') || request.baseUrl.includes('localhost:11435') ? 'ollama'
-      : request.baseUrl.includes('anthropic') ? 'anthropic'
-      : 'openai'
+        : request.baseUrl.includes('localhost:11434') || request.baseUrl.includes('localhost:11435') ? 'ollama'
+          : request.baseUrl.includes('anthropic') ? 'anthropic'
+            : 'openai'
     const { correlationId, startTime } = logApiCallStart(provider, request.resolvedModel)
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
@@ -1885,7 +1885,7 @@ class OpenAIShimMessages {
         response.status === 429 &&
         attempt < maxAttempts - 1
       ) {
-        await response.text().catch(() => {})
+        await response.text().catch(() => { })
         const delaySec = Math.min(
           GITHUB_429_BASE_DELAY_SEC * 2 ** attempt,
           GITHUB_429_MAX_DELAY_SEC,
@@ -2047,9 +2047,9 @@ class OpenAIShimMessages {
         message?: {
           role?: string
           content?:
-            | string
-            | null
-            | Array<{ type?: string; text?: string }>
+          | string
+          | null
+          | Array<{ type?: string; text?: string }>
           reasoning_content?: string | null
           tool_calls?: Array<{
             id: string
@@ -2111,10 +2111,12 @@ class OpenAIShimMessages {
 
     if (choice?.message?.tool_calls) {
       for (const tc of choice.message.tool_calls) {
+        logForDebugging(`[openaiShim] Converting tool call: name=${tc.function.name}, arguments_type=${typeof tc.function.arguments}, arguments=${typeof tc.function.arguments === 'string' ? tc.function.arguments.slice(0, 200) : JSON.stringify(tc.function.arguments).slice(0, 200)}`)
         const input = normalizeToolArguments(
           tc.function.name,
           tc.function.arguments,
         )
+        logForDebugging(`[openaiShim] Normalized input: ${JSON.stringify(input).slice(0, 200)}`)
         content.push({
           type: 'tool_use',
           id: tc.id,

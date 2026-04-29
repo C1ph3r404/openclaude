@@ -1,4 +1,5 @@
 import { APIError } from '@anthropic-ai/sdk'
+import * as fs from 'fs'
 import { buildAnthropicUsageFromRawUsage } from './cacheMetrics.js'
 import { compressToolHistory } from './compressToolHistory.js'
 import { fetchWithProxyRetry } from './fetchWithProxyRetry.js'
@@ -49,22 +50,22 @@ type ResponsesInputPart =
 
 type ResponsesInputItem =
   | {
-      type: 'message'
-      role: 'user' | 'assistant'
-      content: ResponsesInputPart[]
-    }
+    type: 'message'
+    role: 'user' | 'assistant'
+    content: ResponsesInputPart[]
+  }
   | {
-      type: 'function_call'
-      id: string
-      call_id: string
-      name: string
-      arguments: string
-    }
+    type: 'function_call'
+    id: string
+    call_id: string
+    name: string
+    arguments: string
+  }
   | {
-      type: 'function_call_output'
-      call_id: string
-      output: string
-    }
+    type: 'function_call_output'
+    call_id: string
+    output: string
+  }
 
 type ResponsesTool = {
   type: 'function'
@@ -89,6 +90,17 @@ function makeUsage(usage?: Record<string, unknown>): AnthropicUsage {
 
 function makeMessageId(): string {
   return `msg_${crypto.randomUUID().replace(/-/g, '')}`
+}
+
+function debugLog(msg: string, data?: unknown): void {
+  const timestamp = new Date().toISOString()
+  const logEntry = `[${timestamp}] ${msg}${data ? ' ' + JSON.stringify(data) : ''}\n`
+  try {
+    fs.appendFileSync('debug.txt', logEntry)
+  } catch (err) {
+    // Fallback to console if file write fails
+    console.error('[debugLog] Failed to write to debug.txt:', err)
+  }
 }
 
 function normalizeToolUseId(toolUseId: string | undefined): {
@@ -268,7 +280,7 @@ export function convertAnthropicMessagesToResponsesInput(
     if (role === 'assistant') {
       const textBlocks = Array.isArray(content)
         ? content.filter((block: { type?: string }) =>
-            block.type !== 'tool_use' && block.type !== 'thinking')
+          block.type !== 'tool_use' && block.type !== 'thinking')
         : content
       const parts = convertContentBlocksToResponsesParts(textBlocks, 'assistant')
       if (parts.length > 0) {
@@ -491,12 +503,12 @@ export async function performCodexRequest(options: {
     input: input.length > 0
       ? input
       : [
-          {
-            type: 'message',
-            role: 'user',
-            content: [{ type: 'input_text', text: '' }],
-          },
-        ],
+        {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: '' }],
+        },
+      ],
     store: false,
     stream: true,
   }
@@ -783,6 +795,13 @@ export async function* codexStreamToAnthropic(
     if (event.event === 'response.output_item.added') {
       const item = payload.item
       if (item?.type === 'function_call') {
+        debugLog('[codexShim] response.output_item.added for function_call:', {
+          id: item.id,
+          call_id: item.call_id,
+          name: item.name,
+          arguments: item.arguments,
+          argumentsLength: typeof item.arguments === 'string' ? item.arguments.length : 'N/A',
+        })
         yield* closeActiveTextBlock()
         const blockIndex = nextContentBlockIndex++
         const toolUseId = item.call_id ?? item.id ?? `call_${blockIndex}`
@@ -799,11 +818,12 @@ export async function* codexStreamToAnthropic(
             type: 'tool_use',
             id: toolUseId,
             name: item.name ?? 'tool',
-            input: {},
+            input: '',
           },
         }
 
         if (item.arguments) {
+          debugLog('[codexShim] Yielding initial arguments for tool:', { name: item.name, arguments: item.arguments })
           yield {
             type: 'content_block_delta',
             index: blockIndex,
@@ -812,6 +832,8 @@ export async function* codexStreamToAnthropic(
               partial_json: item.arguments,
             },
           }
+        } else {
+          debugLog('[codexShim] No initial arguments for tool - will come via delta events', { name: item.name })
         }
       }
       continue
@@ -843,8 +865,14 @@ export async function* codexStreamToAnthropic(
     }
 
     if (event.event === 'response.function_call_arguments.delta') {
+      debugLog('[codexShim] response.function_call_arguments.delta received:', {
+        item_id: payload.item_id,
+        delta: payload.delta,
+        deltaLength: typeof payload.delta === 'string' ? payload.delta.length : 'N/A',
+      })
       const toolBlock = toolBlocksByItemId.get(String(payload.item_id ?? ''))
       if (toolBlock) {
+        debugLog('[codexShim] Yielding arguments delta for tool block index:', { index: toolBlock.index })
         yield {
           type: 'content_block_delta',
           index: toolBlock.index,
@@ -853,6 +881,8 @@ export async function* codexStreamToAnthropic(
             partial_json: payload.delta ?? '',
           },
         }
+      } else {
+        debugLog('[codexShim] WARNING: No tool block found for item_id:', payload.item_id)
       }
       continue
     }
@@ -922,6 +952,7 @@ export function convertCodexResponseToAnthropicMessage(
   const content: Array<Record<string, unknown>> = []
   const output = Array.isArray(data.output) ? data.output : []
 
+  debugLog('[codexShim] convertCodexResponseToAnthropicMessage: processing output items', { count: output.length })
   for (const item of output) {
     if (item?.type === 'message' && Array.isArray(item.content)) {
       for (const part of item.content) {
@@ -936,10 +967,19 @@ export function convertCodexResponseToAnthropicMessage(
     }
 
     if (item?.type === 'function_call') {
+      debugLog('[codexShim] Processing function_call item:', {
+        id: item.id,
+        call_id: item.call_id,
+        name: item.name,
+        arguments: item.arguments,
+        argumentsLength: typeof item.arguments === 'string' ? item.arguments.length : 'N/A',
+      })
       let input: unknown
       try {
         input = JSON.parse(item.arguments ?? '{}')
-      } catch {
+        debugLog('[codexShim] Parsed arguments successfully:', input)
+      } catch (e) {
+        debugLog('[codexShim] Failed to parse arguments, using raw:', { arguments: item.arguments, error: String(e) })
         input = { raw: item.arguments ?? '' }
       }
 
