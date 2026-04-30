@@ -818,7 +818,7 @@ export async function* codexStreamToAnthropic(
             type: 'tool_use',
             id: toolUseId,
             name: item.name ?? 'tool',
-            input: '',
+            input: {},
           },
         }
 

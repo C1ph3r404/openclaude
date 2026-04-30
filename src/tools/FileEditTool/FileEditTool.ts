@@ -86,6 +86,11 @@ const MAX_EDIT_FILE_SIZE = 1024 * 1024 * 1024 // 1 GiB (stat bytes)
 export const FileEditTool = buildTool({
   name: FILE_EDIT_TOOL_NAME,
   searchHint: 'modify file contents in place',
+  parameterAliases: {
+    file_path: ['path', 'filePath'],
+    old_string: ['find', 'search', 'old'],
+    new_string: ['replace', 'replaceWith', 'new'],
+  },
   maxResultSizeChars: 100_000,
   strict: true,
   async description() {
@@ -207,8 +212,8 @@ export const FileEditTool = buildTool({
       const fileBuffer = await fs.readFileBytes(fullFilePath)
       const encoding: BufferEncoding =
         fileBuffer.length >= 2 &&
-        fileBuffer[0] === 0xff &&
-        fileBuffer[1] === 0xfe
+          fileBuffer[0] === 0xff &&
+          fileBuffer[1] === 0xfe
           ? 'utf16le'
           : 'utf8'
       fileContent = fileBuffer.toString(encoding).replaceAll('\r\n', '\n')
@@ -415,7 +420,7 @@ export const FileEditTool = buildTool({
           dynamicSkillDirTriggers?.add(dir)
         }
         // Don't await - let skill loading happen in the background
-        addSkillDirectories(newSkillDirs).catch(() => {})
+        addSkillDirectories(newSkillDirs).catch(() => { })
       }
 
       // Activate conditional skills whose path patterns match this file

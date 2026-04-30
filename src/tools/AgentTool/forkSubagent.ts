@@ -192,9 +192,10 @@ Output format (plain text labels, not markdown headers):
   Key files: <relevant file paths — include for research tasks>
   Files changed: <list with commit hash — include only if you modified files>
   Issues: <list — include only if there are issues to flag>
-</${FORK_BOILERPLATE_TAG}>
 
-${FORK_DIRECTIVE_PREFIX}${directive}`
+
+${FORK_DIRECTIVE_PREFIX}${directive}
+</${FORK_BOILERPLATE_TAG}>`
 }
 
 /**

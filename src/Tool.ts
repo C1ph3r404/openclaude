@@ -8,6 +8,7 @@ import type {
 } from '@modelcontextprotocol/sdk/types.js'
 import type { UUID } from 'crypto'
 import type { z } from 'zod/v4'
+import type { ParameterAliasMap } from './utils/parameterAliases.js'
 import type { Command } from './commands.js'
 import type { CanUseToolFn } from './hooks/useCanUseTool.js'
 import type { ThinkingConfig } from './utils/thinking.js'
@@ -95,10 +96,10 @@ export type QueryChainTracking = {
 export type ValidationResult =
   | { result: true }
   | {
-      result: false
-      message: string
-      errorCode: number
-    }
+    result: false
+    message: string
+    errorCode: number
+  }
 
 export type SetToolJSXFn = (
   args: {
@@ -149,9 +150,9 @@ export const getEmptyToolPermissionContext: () => ToolPermissionContext =
 
 export type CompactProgressEvent =
   | {
-      type: 'hooks_start'
-      hookType: 'pre_compact' | 'post_compact' | 'session_start'
-    }
+    type: 'hooks_start'
+    hookType: 'pre_compact' | 'post_compact' | 'session_start'
+  }
   | { type: 'compact_start' }
   | { type: 'compact_end' }
 
@@ -470,6 +471,13 @@ export type Tool<
   mcpInfo?: { serverName: string; toolName: string }
   readonly name: string
   /**
+   * Parameter aliases for this tool's input schema.
+   * Maps canonical parameter names to arrays of acceptable aliases.
+   * Used to normalize tool input before validation, allowing models to use
+   * alternative parameter names that all map to their canonical names.
+   */
+  readonly parameterAliases?: ParameterAliasMap
+  /**
    * Maximum size in characters for tool result before it gets persisted to disk.
    * When exceeded, the result is saved to a file and Claude receives a preview
    * with the file path instead of the full content.
@@ -749,10 +757,10 @@ export type ToolDef<
  */
 type BuiltTool<D> = Omit<D, DefaultableToolKeys> & {
   [K in DefaultableToolKeys]-?: K extends keyof D
-    ? undefined extends D[K]
-      ? ToolDefaults[K]
-      : D[K]
-    : ToolDefaults[K]
+  ? undefined extends D[K]
+  ? ToolDefaults[K]
+  : D[K]
+  : ToolDefaults[K]
 }
 
 /**

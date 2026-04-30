@@ -57,6 +57,10 @@ export type Output = z.infer<OutputSchema>
 export const GlobTool = buildTool({
   name: GLOB_TOOL_NAME,
   searchHint: 'find files by name pattern or wildcard',
+  parameterAliases: {
+    pattern: ['glob', 'filePattern', 'wildcard'],
+    path: ['directory', 'dir'],
+  },
   maxResultSizeChars: 100_000,
   async description() {
     return DESCRIPTION
@@ -189,8 +193,8 @@ export const GlobTool = buildTool({
         ...output.filenames,
         ...(output.truncated
           ? [
-              '(Results are truncated. Consider using a more specific path or pattern.)',
-            ]
+            '(Results are truncated. Consider using a more specific path or pattern.)',
+          ]
           : []),
       ].join('\n'),
     }

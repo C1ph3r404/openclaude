@@ -107,11 +107,11 @@ import type { SkillToolProgress as Progress } from '../../types/tools.js'
 /* eslint-disable @typescript-eslint/no-require-imports */
 const remoteSkillModules = feature('EXPERIMENTAL_SKILL_SEARCH')
   ? {
-      ...(require('../../services/skillSearch/remoteSkillState.js') as typeof import('../../services/skillSearch/remoteSkillState.js')),
-      ...(require('../../services/skillSearch/remoteSkillLoader.js') as typeof import('../../services/skillSearch/remoteSkillLoader.js')),
-      ...(require('../../services/skillSearch/telemetry.js') as typeof import('../../services/skillSearch/telemetry.js')),
-      ...(require('../../services/skillSearch/featureCheck.js') as typeof import('../../services/skillSearch/featureCheck.js')),
-    }
+    ...(require('../../services/skillSearch/remoteSkillState.js') as typeof import('../../services/skillSearch/remoteSkillState.js')),
+    ...(require('../../services/skillSearch/remoteSkillLoader.js') as typeof import('../../services/skillSearch/remoteSkillLoader.js')),
+    ...(require('../../services/skillSearch/telemetry.js') as typeof import('../../services/skillSearch/telemetry.js')),
+    ...(require('../../services/skillSearch/featureCheck.js') as typeof import('../../services/skillSearch/featureCheck.js')),
+  }
   : null
 /* eslint-enable @typescript-eslint/no-require-imports */
 
@@ -138,11 +138,11 @@ async function executeForkedSkill(
 
   const wasDiscoveredField =
     feature('EXPERIMENTAL_SKILL_SEARCH') &&
-    remoteSkillModules!.isSkillSearchEnabled()
+      remoteSkillModules!.isSkillSearchEnabled()
       ? {
-          was_discovered:
-            context.discoveredSkillNames?.has(commandName) ?? false,
-        }
+        was_discovered:
+          context.discoveredSkillNames?.has(commandName) ?? false,
+      }
       : {}
   const pluginMarketplace = command.pluginInfo
     ? parsePluginIdentifier(command.pluginInfo.repository).marketplace
@@ -331,6 +331,10 @@ export type Output = z.input<OutputSchema>
 export const SkillTool: Tool<InputSchema, Output, Progress> = buildTool({
   name: SKILL_TOOL_NAME,
   searchHint: 'invoke a slash-command skill',
+  parameterAliases: {
+    skill: ['command', 'name'],
+    args: ['arguments', 'params', 'parameters'],
+  },
   maxResultSizeChars: 100_000,
   get inputSchema(): InputSchema {
     return inputSchema()
@@ -670,11 +674,11 @@ export const SkillTool: Tool<InputSchema, Output, Progress> = buildTool({
 
     const wasDiscoveredField =
       feature('EXPERIMENTAL_SKILL_SEARCH') &&
-      remoteSkillModules!.isSkillSearchEnabled()
+        remoteSkillModules!.isSkillSearchEnabled()
         ? {
-            was_discovered:
-              context.discoveredSkillNames?.has(commandName) ?? false,
-          }
+          was_discovered:
+            context.discoveredSkillNames?.has(commandName) ?? false,
+        }
         : {}
     const pluginMarketplace =
       command?.type === 'prompt' && command.pluginInfo
@@ -719,20 +723,20 @@ export const SkillTool: Tool<InputSchema, Output, Progress> = buildTool({
       }),
       ...(command?.type === 'prompt' &&
         command.pluginInfo && {
-          _PROTO_plugin_name: command.pluginInfo.pluginManifest
-            .name as AnalyticsMetadata_I_VERIFIED_THIS_IS_PII_TAGGED,
-          ...(pluginMarketplace && {
-            _PROTO_marketplace_name:
-              pluginMarketplace as AnalyticsMetadata_I_VERIFIED_THIS_IS_PII_TAGGED,
-          }),
-          plugin_name: (isOfficialSkill
-            ? command.pluginInfo.pluginManifest.name
-            : 'third-party') as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-          plugin_repository: (isOfficialSkill
-            ? command.pluginInfo.repository
-            : 'third-party') as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-          ...buildPluginCommandTelemetryFields(command.pluginInfo),
+        _PROTO_plugin_name: command.pluginInfo.pluginManifest
+          .name as AnalyticsMetadata_I_VERIFIED_THIS_IS_PII_TAGGED,
+        ...(pluginMarketplace && {
+          _PROTO_marketplace_name:
+            pluginMarketplace as AnalyticsMetadata_I_VERIFIED_THIS_IS_PII_TAGGED,
         }),
+        plugin_name: (isOfficialSkill
+          ? command.pluginInfo.pluginManifest.name
+          : 'third-party') as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+        plugin_repository: (isOfficialSkill
+          ? command.pluginInfo.repository
+          : 'third-party') as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+        ...buildPluginCommandTelemetryFields(command.pluginInfo),
+      }),
     })
 
     // Get the tool use ID from the parent message for linking newMessages

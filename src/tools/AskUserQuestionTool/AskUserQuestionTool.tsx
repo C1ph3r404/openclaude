@@ -109,6 +109,10 @@ function _temp(t0) {
 export const AskUserQuestionTool: Tool<InputSchema, Output> = buildTool({
   name: ASK_USER_QUESTION_TOOL_NAME,
   searchHint: 'prompt the user with a multiple-choice question',
+  parameterAliases: {
+    questions: ['prompts', 'survey'],
+    answers: ['responses', 'choices'],
+  },
   maxResultSizeChars: 100_000,
   shouldDefer: true,
   async description() {
@@ -199,9 +203,9 @@ export const AskUserQuestionTool: Tool<InputSchema, Output> = buildTool({
   },
   renderToolUseRejectedMessage() {
     return <Box flexDirection="row" marginTop={1}>
-        <Text color={getModeColor('default')}>{BLACK_CIRCLE}&nbsp;</Text>
-        <Text>User declined to answer questions</Text>
-      </Box>;
+      <Text color={getModeColor('default')}>{BLACK_CIRCLE}&nbsp;</Text>
+      <Text>User declined to answer questions</Text>
+    </Box>;
   },
   renderToolUseErrorMessage() {
     return null;

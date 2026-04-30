@@ -4,9 +4,9 @@ import type { PartialCompactDirection } from '../../types/message.js'
 // Dead code elimination: conditional import for proactive mode
 /* eslint-disable @typescript-eslint/no-require-imports */
 const proactiveModule =
-  feature('PROACTIVE') || feature('KAIROS')
-    ? (require('../../proactive/index.js') as typeof import('../../proactive/index.js'))
-    : null
+   feature('PROACTIVE') || feature('KAIROS')
+      ? (require('../../proactive/index.js') as typeof import('../../proactive/index.js'))
+      : null
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 // Aggressive no-tools preamble. The cache-sharing fork path inherits the
@@ -16,7 +16,7 @@ const proactiveModule =
 // no text output → falls through to the streaming fallback (2.79% on 4.6 vs
 // 0.01% on 4.5). Putting this FIRST and making it explicit about rejection
 // consequences prevents the wasted turn.
-const NO_TOOLS_PREAMBLE = `CRITICAL: Respond with TEXT ONLY. Do NOT call any tools.
+const NO_TOOLS_PREAMBLE = `<system-reminder>CRITICAL: Respond with TEXT ONLY. Do NOT call any tools.
 
 - Do NOT use Read, Bash, Grep, Glob, Edit, Write, or ANY other tool.
 - You already have all the context you need in the conversation above.
@@ -267,39 +267,39 @@ Please provide your summary following this structure, ensuring precision and tho
 `
 
 const NO_TOOLS_TRAILER =
-  '\n\nREMINDER: Do NOT call any tools. Respond with plain text only — ' +
-  'an <analysis> block followed by a <summary> block. ' +
-  'Tool calls will be rejected and you will fail the task.'
+   '\n\nREMINDER: Do NOT call any tools. Respond with plain text only — ' +
+   'an <analysis> block followed by a <summary> block. ' +
+   'Tool calls will be rejected and you will fail the task.</system-reminder>'
 
 export function getPartialCompactPrompt(
-  customInstructions?: string,
-  direction: PartialCompactDirection = 'from',
+   customInstructions?: string,
+   direction: PartialCompactDirection = 'from',
 ): string {
-  const template =
-    direction === 'up_to'
-      ? PARTIAL_COMPACT_UP_TO_PROMPT
-      : PARTIAL_COMPACT_PROMPT
-  let prompt = NO_TOOLS_PREAMBLE + template
+   const template =
+      direction === 'up_to'
+         ? PARTIAL_COMPACT_UP_TO_PROMPT
+         : PARTIAL_COMPACT_PROMPT
+   let prompt = NO_TOOLS_PREAMBLE + template
 
-  if (customInstructions && customInstructions.trim() !== '') {
-    prompt += `\n\nAdditional Instructions:\n${customInstructions}`
-  }
+   if (customInstructions && customInstructions.trim() !== '') {
+      prompt += `\n\nAdditional Instructions:\n${customInstructions}`
+   }
 
-  prompt += NO_TOOLS_TRAILER
+   prompt += NO_TOOLS_TRAILER
 
-  return prompt
+   return prompt
 }
 
 export function getCompactPrompt(customInstructions?: string): string {
-  let prompt = NO_TOOLS_PREAMBLE + BASE_COMPACT_PROMPT
+   let prompt = NO_TOOLS_PREAMBLE + BASE_COMPACT_PROMPT
 
-  if (customInstructions && customInstructions.trim() !== '') {
-    prompt += `\n\nAdditional Instructions:\n${customInstructions}`
-  }
+   if (customInstructions && customInstructions.trim() !== '') {
+      prompt += `\n\nAdditional Instructions:\n${customInstructions}`
+   }
 
-  prompt += NO_TOOLS_TRAILER
+   prompt += NO_TOOLS_TRAILER
 
-  return prompt
+   return prompt
 }
 
 /**
@@ -309,66 +309,66 @@ export function getCompactPrompt(customInstructions?: string): string {
  * @returns The formatted summary with analysis stripped and summary tags replaced by headers
  */
 export function formatCompactSummary(summary: string): string {
-  let formattedSummary = summary
+   let formattedSummary = summary
 
-  // Strip analysis section — it's a drafting scratchpad that improves summary
-  // quality but has no informational value once the summary is written.
-  formattedSummary = formattedSummary.replace(
-    /<analysis>[\s\S]*?<\/analysis>/,
-    '',
-  )
+   // Strip analysis section — it's a drafting scratchpad that improves summary
+   // quality but has no informational value once the summary is written.
+   formattedSummary = formattedSummary.replace(
+      /<analysis>[\s\S]*?<\/analysis>/,
+      '',
+   )
 
-  // Extract and format summary section
-  const summaryMatch = formattedSummary.match(/<summary>([\s\S]*?)<\/summary>/)
-  if (summaryMatch) {
-    const content = summaryMatch[1] || ''
-    formattedSummary = formattedSummary.replace(
-      /<summary>[\s\S]*?<\/summary>/,
-      `Summary:\n${content.trim()}`,
-    )
-  }
+   // Extract and format summary section
+   const summaryMatch = formattedSummary.match(/<summary>([\s\S]*?)<\/summary>/)
+   if (summaryMatch) {
+      const content = summaryMatch[1] || ''
+      formattedSummary = formattedSummary.replace(
+         /<summary>[\s\S]*?<\/summary>/,
+         `Summary:\n${content.trim()}`,
+      )
+   }
 
-  // Clean up extra whitespace between sections
-  formattedSummary = formattedSummary.replace(/\n\n+/g, '\n\n')
+   // Clean up extra whitespace between sections
+   formattedSummary = formattedSummary.replace(/\n\n+/g, '\n\n')
 
-  return formattedSummary.trim()
+   return formattedSummary.trim()
 }
 
 export function getCompactUserSummaryMessage(
-  summary: string,
-  suppressFollowUpQuestions?: boolean,
-  transcriptPath?: string,
-  recentMessagesPreserved?: boolean,
+   summary: string,
+   suppressFollowUpQuestions?: boolean,
+   transcriptPath?: string,
+   recentMessagesPreserved?: boolean,
 ): string {
-  const formattedSummary = formatCompactSummary(summary)
+   const formattedSummary = formatCompactSummary(summary)
 
-  let baseSummary = `This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+   let baseSummary = `This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
 
 ${formattedSummary}`
 
-  if (transcriptPath) {
-    baseSummary += `\n\nIf you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: ${transcriptPath}`
-  }
+   if (transcriptPath) {
+      baseSummary += `\n\nIf you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: ${transcriptPath}`
+   }
 
-  if (recentMessagesPreserved) {
-    baseSummary += `\n\nRecent messages are preserved verbatim.`
-  }
+   if (recentMessagesPreserved) {
+      baseSummary += `\n\nRecent messages are preserved verbatim.`
+   }
 
-  if (suppressFollowUpQuestions) {
-    let continuation = `${baseSummary}
+   if (suppressFollowUpQuestions) {
+      let continuation = `${baseSummary}
 Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.`
 
-    if (
-      (feature('PROACTIVE') || feature('KAIROS')) &&
-      proactiveModule?.isProactiveActive()
-    ) {
-      continuation += `
+      if (
+         (feature('PROACTIVE') || feature('KAIROS')) &&
+         proactiveModule?.isProactiveActive()
+      ) {
+         continuation += `
 
 You are running in autonomous/proactive mode. This is NOT a first wake-up — you were already working autonomously before compaction. Continue your work loop: pick up where you left off based on the summary above. Do not greet the user or ask what to work on.`
-    }
+      }
 
-    return continuation
-  }
+      return continuation
+   }
 
-  return baseSummary
+   return baseSummary
 }

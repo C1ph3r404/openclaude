@@ -30,7 +30,7 @@ function buildSummaryPrompt(previousSummary: string | null): string {
     ? `\nPrevious: "${previousSummary}" — say something NEW.\n`
     : ''
 
-  return `Describe your most recent action in 3-5 words using present tense (-ing). Name the file or function, not the branch. Do not use tools.
+  return `<fork-summary-prompt>Describe your most recent action in 3-5 words using present tense (-ing). Name the file or function, not the branch. Do not use tools.
 ${prevLine}
 Good: "Reading runAgent.ts"
 Good: "Fixing null check in validate.ts"
@@ -40,7 +40,7 @@ Good: "Adding retry logic to fetchUser"
 Bad (past tense): "Analyzed the branch diff"
 Bad (too vague): "Investigating the issue"
 Bad (too long): "Reviewing full branch diff and AgentTool.tsx integration"
-Bad (branch name): "Analyzed adam/background-summary branch diff"`
+Bad (branch name): "Analyzed adam/background-summary branch diff"</fork-summary-prompt>`
 }
 
 export function startAgentSummarization(

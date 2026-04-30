@@ -337,6 +337,11 @@ export type Output = z.infer<OutputSchema>
 export const FileReadTool = buildTool({
   name: FILE_READ_TOOL_NAME,
   searchHint: 'read files, images, PDFs, notebooks',
+  parameterAliases: {
+    file_path: ['path', 'filePath'],
+    offset: ['startLine', 'fromLine', 'start'],
+    limit: ['numLines', 'lineCount', 'end'],
+  },
   // Output is bounded by maxTokens (validateContentTokens). Persisting to a
   // file the model reads back with Read is circular — never persist.
   maxResultSizeChars: Infinity,
@@ -583,7 +588,7 @@ export const FileReadTool = buildTool({
           context.dynamicSkillDirTriggers?.add(dir)
         }
         // Don't await - let skill loading happen in the background
-        addSkillDirectories(newSkillDirs).catch(() => {})
+        addSkillDirectories(newSkillDirs).catch(() => { })
       }
 
       // Activate conditional skills whose path patterns match this file
@@ -830,11 +835,11 @@ async function callInner(
     if (cellsJsonBytes > maxSizeBytes) {
       throw new Error(
         `Notebook content (${formatFileSize(cellsJsonBytes)}) exceeds maximum allowed size (${formatFileSize(maxSizeBytes)}). ` +
-          `Use ${BASH_TOOL_NAME} with jq to read specific portions:\n` +
-          `  cat "${file_path}" | jq '.cells[:20]' # First 20 cells\n` +
-          `  cat "${file_path}" | jq '.cells[100:120]' # Cells 100-120\n` +
-          `  cat "${file_path}" | jq '.cells | length' # Count total cells\n` +
-          `  cat "${file_path}" | jq '.cells[] | select(.cell_type=="code") | .source' # All code sources`,
+        `Use ${BASH_TOOL_NAME} with jq to read specific portions:\n` +
+        `  cat "${file_path}" | jq '.cells[:20]' # First 20 cells\n` +
+        `  cat "${file_path}" | jq '.cells[100:120]' # Cells 100-120\n` +
+        `  cat "${file_path}" | jq '.cells | length' # Count total cells\n` +
+        `  cat "${file_path}" | jq '.cells[] | select(.cell_type=="code") | .source' # All code sources`,
       )
     }
 
@@ -952,8 +957,8 @@ async function callInner(
     if (pageCount !== null && pageCount > PDF_AT_MENTION_INLINE_THRESHOLD) {
       throw new Error(
         `This PDF has ${pageCount} pages, which is too many to read at once. ` +
-          `Use the pages parameter to read specific page ranges (e.g., pages: "1-5"). ` +
-          `Maximum ${PDF_MAX_PAGES_PER_READ} pages per request.`,
+        `Use the pages parameter to read specific page ranges (e.g., pages: "1-5"). ` +
+        `Maximum ${PDF_MAX_PAGES_PER_READ} pages per request.`,
       )
     }
 
@@ -982,8 +987,8 @@ async function callInner(
     if (!isPDFSupported()) {
       throw new Error(
         'Reading full PDFs is not supported with this model. Use a newer model (Sonnet 3.5 v2 or later), ' +
-          `or use the pages parameter to read specific page ranges (e.g., pages: "1-5", maximum ${PDF_MAX_PAGES_PER_READ} pages per request). ` +
-          'Page extraction requires poppler-utils: install with `brew install poppler` on macOS or `apt-get install poppler-utils` on Debian/Ubuntu.',
+        `or use the pages parameter to read specific page ranges (e.g., pages: "1-5", maximum ${PDF_MAX_PAGES_PER_READ} pages per request). ` +
+        'Page extraction requires poppler-utils: install with `brew install poppler` on macOS or `apt-get install poppler-utils` on Debian/Ubuntu.',
       )
     }
 

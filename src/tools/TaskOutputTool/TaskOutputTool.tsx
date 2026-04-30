@@ -144,6 +144,11 @@ async function waitForTaskCompletion(taskId: string, getAppState: () => {
 export const TaskOutputTool: Tool<InputSchema, TaskOutputToolOutput> = buildTool({
   name: TASK_OUTPUT_TOOL_NAME,
   searchHint: 'read output/logs from a background task',
+  parameterAliases: {
+    task_id: ['id', 'taskId'],
+    block: ['wait', 'waitForCompletion'],
+    timeout: ['timeoutMs'],
+  },
   maxResultSizeChars: 100_000,
   shouldDefer: true,
   // Backwards-compatible aliases for renamed tools
@@ -328,12 +333,12 @@ export const TaskOutputTool: Tool<InputSchema, TaskOutputToolOutput> = buildTool
       taskType?: string;
     } | undefined;
     return <Box flexDirection="column">
-          {progressData?.taskDescription && <Text>&nbsp;&nbsp;{progressData.taskDescription}</Text>}
-          <Text>
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Waiting for task{' '}
-            <Text dimColor>(esc to give additional instructions)</Text>
-          </Text>
-        </Box>;
+      {progressData?.taskDescription && <Text>&nbsp;&nbsp;{progressData.taskDescription}</Text>}
+      <Text>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Waiting for task{' '}
+        <Text dimColor>(esc to give additional instructions)</Text>
+      </Text>
+    </Box>;
   },
   renderToolResultMessage(content, _, {
     verbose,
@@ -434,9 +439,9 @@ function TaskOutputResultDisplay(t0) {
         let t5;
         if ($[15] !== task.result || $[16] !== theme) {
           t5 = task.result && <Box marginTop={1}><AgentResponseDisplay content={[{
-              type: "text",
-              text: task.result
-            }]} theme={theme} /></Box>;
+            type: "text",
+            text: task.result
+          }]} theme={theme} /></Box>;
           $[15] = task.result;
           $[16] = theme;
           $[17] = t5;

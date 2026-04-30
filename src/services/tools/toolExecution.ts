@@ -71,6 +71,10 @@ import {
 import { executePermissionDeniedHooks } from '../../utils/hooks.js'
 import { logError } from '../../utils/log.js'
 import {
+  buildReverseAliasMap,
+  normalizeAliasedInput,
+} from '../../utils/parameterAliases.js'
+import {
   CANCEL_MESSAGE,
   createProgressMessage,
   createStopHookSummaryMessage,
@@ -638,7 +642,36 @@ async function checkPermissionsAndCallTool(
   ) => void,
 ): Promise<MessageUpdateLazy[]> {
   // Validate input types with zod (surprisingly, the model is not great at generating valid input)
-  const parsedInput = tool.inputSchema.safeParse(input)
+  // First, normalize any aliased parameters to their canonical names
+  let normalizedInput = input
+  if (tool.parameterAliases && Object.keys(tool.parameterAliases).length > 0) {
+    try {
+      const reverseAliasMap = buildReverseAliasMap(tool.parameterAliases)
+      normalizedInput = normalizeAliasedInput(
+        { ...input } as Record<string, unknown>,
+        reverseAliasMap,
+      )
+    } catch (aliasError) {
+      // If alias processing fails, return a validation error
+      const errorContent = `InputValidationError: Failed to normalize parameter aliases: ${errorMessage(aliasError)}`
+      logForDebugging(`${tool.name} tool alias resolution error: ${errorContent}`)
+      return [
+        {
+          message: createUserMessage({
+            content: [
+              {
+                type: 'tool_result',
+                content: `<tool_use_error>${errorContent}</tool_use_error>`,
+                is_error: true,
+                tool_use_id: toolUseID,
+              },
+            ],
+          }),
+        },
+      ]
+    }
+  }
+  const parsedInput = tool.inputSchema.safeParse(normalizedInput)
   if (!parsedInput.success) {
     const fallbackErrorContent = formatZodValidationError(tool.name, parsedInput.error)
     let errorContent =
@@ -815,8 +848,8 @@ async function checkPermissionsAndCallTool(
   let callInput = processedInput
   const backfilledClone =
     tool.backfillObservableInput &&
-    typeof processedInput === 'object' &&
-    processedInput !== null
+      typeof processedInput === 'object' &&
+      processedInput !== null
       ? ({ ...processedInput } as typeof processedInput)
       : null
   if (backfilledClone) {
@@ -972,7 +1005,7 @@ async function checkPermissionsAndCallTool(
   ) {
     logForDebugging(
       `Slow permission decision: ${permissionDurationMs}ms for ${tool.name} ` +
-        `(mode=${permissionMode}, behavior=${permissionDecision.behavior})`,
+      `(mode=${permissionMode}, behavior=${permissionDecision.behavior})`,
       { level: 'info' },
     )
   }
@@ -1226,7 +1259,7 @@ async function checkPermissionsAndCallTool(
     'file_path' in processedInput &&
     'file_path' in (callInput as Record<string, unknown>) &&
     (processedInput as Record<string, unknown>).file_path ===
-      (backfilledClone as Record<string, unknown>).file_path
+    (backfilledClone as Record<string, unknown>).file_path
   ) {
     callInput = {
       ...processedInput,
@@ -1441,10 +1474,10 @@ async function checkPermissionsAndCallTool(
       // don't modify the output), otherwise map from scratch.
       const toolResultBlock = preMappedBlock
         ? await processPreMappedToolResultBlock(
-            preMappedBlock,
-            tool.name,
-            tool.maxResultSizeChars,
-          )
+          preMappedBlock,
+          tool.name,
+          tool.maxResultSizeChars,
+        )
         : await processToolResultBlock(tool, toolUseResult, toolUseID)
 
       // Build content blocks - tool result first, then optional feedback
@@ -1499,9 +1532,9 @@ async function checkPermissionsAndCallTool(
         }),
         contextModifier: toolContextModifier
           ? {
-              toolUseID: toolUseID,
-              modifyContext: toolContextModifier,
-            }
+            toolUseID: toolUseID,
+            modifyContext: toolContextModifier,
+          }
           : undefined,
       })
     }
@@ -1770,7 +1803,7 @@ async function checkPermissionsAndCallTool(
           mcpMeta: toolUseContext.agentId
             ? undefined
             : error instanceof
-                McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+              McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
               ? error.mcpMeta
               : undefined,
           sourceToolAssistantUUID: assistantMessage.uuid,

@@ -48,6 +48,10 @@ type Output = z.infer<OutputSchema>
 export const MonitorTool = buildTool({
   name: MONITOR_TOOL_NAME,
   searchHint: 'stream shell output as notifications',
+  parameterAliases: {
+    command: ['cmd'],
+    description: ['label', 'title'],
+  },
   maxResultSizeChars: 10_000,
   strict: true,
 

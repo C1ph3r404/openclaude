@@ -94,6 +94,10 @@ export type FileWriteToolInput = InputSchema
 export const FileWriteTool = buildTool({
   name: FILE_WRITE_TOOL_NAME,
   searchHint: 'create or overwrite files',
+  parameterAliases: {
+    file_path: ['path', 'filePath'],
+    content: ['text', 'body', 'data'],
+  },
   maxResultSizeChars: 100_000,
   strict: true,
   async description() {
@@ -238,7 +242,7 @@ export const FileWriteTool = buildTool({
         dynamicSkillDirTriggers?.add(dir)
       }
       // Don't await - let skill loading happen in the background
-      addSkillDirectories(newSkillDirs).catch(() => {})
+      addSkillDirectories(newSkillDirs).catch(() => { })
     }
 
     // Activate conditional skills whose path patterns match this file
