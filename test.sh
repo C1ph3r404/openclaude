@@ -2,30 +2,35 @@
 
 set -e
 
+LOG_FILE="../BrowserLLM/debug/log.txt"
+DEBUG_FILE="debug/debug.txt"
+
 # Step 1: Build
 echo "Running build..."
 npm run build
 
-rm -rf ./debug/debug.txt
+
+rm -rf "$LOG_FILE"
+rm -rf "$DEBUG_FILE"
 
 # Step 2: Run openclaude in background
 echo "Starting openclaude..."
-bin/openclaude test --debug-file debug/debug.txt > /dev/null 2>&1 &
+script -q -c "exec bin/openclaude test --debug-file $DEBUG_FILE" /dev/null </dev/null > /dev/null 2>&1 &
 PID=$!
 
-# Let it run for a bit (adjust if needed)
-sleep 20
+sleep 5 # Wait for the server to start and write to the log file
 
-# Kill the process after waiting
-kill $PID 2>/dev/null || true
+kill -INT $PID 2>/dev/null || true
+wait $PID 2>/dev/null || true
+
+reset
 
 # Step 3: Check debug file
-LOG_FILE="debug/debug.txt"
 
-if grep -qE "Edit tool input error|file_path.*missing|old_string.*missing|new_string.*missing" "$LOG_FILE"; then
-  echo "FAILURE"
+if grep -i "x-agent-id" "$LOG_FILE"; then
+  echo "SUCCESS: Found 'x-agent-id' in log file."
   exit 1
 else
-  echo "SUCCESS"
+  echo "FAILURE: 'x-agent-id' not found in log file."
   exit 0
 fi

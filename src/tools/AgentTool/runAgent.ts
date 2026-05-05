@@ -107,7 +107,7 @@ async function initializeAgentMcpServers(
     return {
       clients: parentClients,
       tools: [],
-      cleanup: async () => {},
+      cleanup: async () => { },
     }
   }
 
@@ -124,7 +124,7 @@ async function initializeAgentMcpServers(
     return {
       clients: parentClients,
       tools: [],
-      cleanup: async () => {},
+      cleanup: async () => { },
     }
   }
 
@@ -418,7 +418,7 @@ export async function* runAgent({
     baseSystemContext
   const resolvedSystemContext =
     agentDefinition.agentType === 'Explore' ||
-    agentDefinition.agentType === 'Plan'
+      agentDefinition.agentType === 'Plan'
       ? systemContextNoGit
       : baseSystemContext
 
@@ -521,14 +521,14 @@ export async function* runAgent({
   const agentSystemPrompt = override?.systemPrompt
     ? override.systemPrompt
     : asSystemPrompt(
-        await getAgentSystemPrompt(
-          agentDefinition,
-          toolUseContext,
-          resolvedAgentModel,
-          additionalWorkingDirectories,
-          resolvedTools,
-        ),
-      )
+      await getAgentSystemPrompt(
+        agentDefinition,
+        toolUseContext,
+        resolvedAgentModel,
+        additionalWorkingDirectories,
+        resolvedTools,
+      ),
+    )
 
   // Determine abortController:
   // - Override takes precedence

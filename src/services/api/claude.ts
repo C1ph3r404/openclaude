@@ -256,6 +256,7 @@ import {
   type RetryContext,
   withRetry,
 } from './withRetry.js'
+import { log } from 'console'
 
 // Define a type that represents valid JSON values
 type JsonValue = string | number | boolean | null | JsonObject | JsonArray
@@ -736,6 +737,9 @@ export async function queryModelWithoutStreaming({
   signal: AbortSignal
   options: Options
 }): Promise<AssistantMessage> {
+
+  //log options for debugging
+  logForDebugging('queryModelWithoutStreaming options: ' + JSON.stringify(options));
   // Store the assistant message but continue consuming the generator to ensure
   // logAPISuccessAndDuration gets called (which happens after all yields)
   let assistantMessage: AssistantMessage | undefined
@@ -782,6 +786,9 @@ export async function* queryModelWithStreaming({
   StreamEvent | AssistantMessage | SystemAPIErrorMessage,
   void
 > {
+  //debugging options
+  logForDebugging('queryModelWithStreaming options: ' + JSON.stringify(options));
+
   return yield* withStreamingVCR(messages, async function* () {
     yield* queryModel(
       messages,
@@ -836,6 +843,7 @@ export async function* executeNonStreamingRequest(
     fetchOverride?: Options['fetchOverride']
     source: string
     providerOverride?: Options['providerOverride']
+    agentId?: string
   },
   retryOptions: {
     model: string
@@ -864,6 +872,7 @@ export async function* executeNonStreamingRequest(
         fetchOverride: clientOptions.fetchOverride,
         source: clientOptions.source,
         providerOverride: clientOptions.providerOverride,
+        agentId: clientOptions.agentId,
       }),
     async (anthropic, attempt, context) => {
       const start = Date.now()
@@ -1800,6 +1809,8 @@ async function* queryModel(
   let isFastModeRequest = isFastMode // Keep separate state as it may change if falling back
   let isAdvisorInProgress = false
 
+  //debug options.agentid
+  logForDebugging("queryModel AgentId: " + options.agentId)
   try {
     queryCheckpoint('query_client_creation_start')
     const generator = withRetry(
@@ -1810,6 +1821,7 @@ async function* queryModel(
           fetchOverride: options.fetchOverride,
           source: options.querySource,
           providerOverride: options.providerOverride,
+          agentId: options.agentId,
         }),
       async (anthropic, attempt, context) => {
         attemptNumber = attempt
@@ -2576,7 +2588,7 @@ async function* queryModel(
           : 'other') as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
       })
       const result = yield* executeNonStreamingRequest(
-        { model: options.model, source: options.querySource, providerOverride: options.providerOverride },
+        { model: options.model, source: options.querySource, providerOverride: options.providerOverride, agentId: options.agentId },
         {
           model: options.model,
           fallbackModel: options.fallbackModel,
@@ -2675,7 +2687,7 @@ async function* queryModel(
       try {
         // Fall back to non-streaming mode
         const result = yield* executeNonStreamingRequest(
-          { model: options.model, source: options.querySource },
+          { model: options.model, source: options.querySource, agentId: options.agentId },
           {
             model: options.model,
             fallbackModel: options.fallbackModel,
