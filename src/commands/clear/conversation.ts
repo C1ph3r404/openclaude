@@ -56,6 +56,7 @@ export async function clearConversation({
   getAppState,
   setAppState,
   setConversationId,
+  skipBrowserLLMDelete = false,
 }: {
   setMessages: (updater: (prev: Message[]) => Message[]) => void
   readFileState: FileStateCache
@@ -64,9 +65,11 @@ export async function clearConversation({
   getAppState?: () => AppState
   setAppState?: (f: (prev: AppState) => AppState) => void
   setConversationId?: (id: UUID) => void
+  skipBrowserLLMDelete?: boolean
 }): Promise<void> {
   // If using BrowserLLM, call delete-chat endpoint and use chatID as session name
-  if (isBrowserLLMProvider()) {
+  // (unless explicitly skipped, e.g., when /new already created a new chat)
+  if (isBrowserLLMProvider() && !skipBrowserLLMDelete) {
     try {
       const result = await deleteChat()
       if (!result.success) {

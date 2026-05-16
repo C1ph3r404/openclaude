@@ -710,6 +710,7 @@ export type Options = {
   hasPendingMcpServers?: boolean
   queryTracking?: QueryChainTracking
   agentId?: AgentId // Only set for subagents
+  agentType?: string // Agent type for tracking/analytics
   outputFormat?: BetaJSONOutputFormat
   fastMode?: boolean
   advisorModel?: string
@@ -844,6 +845,7 @@ export async function* executeNonStreamingRequest(
     source: string
     providerOverride?: Options['providerOverride']
     agentId?: string
+    agentType?: string
   },
   retryOptions: {
     model: string
@@ -873,6 +875,7 @@ export async function* executeNonStreamingRequest(
         source: clientOptions.source,
         providerOverride: clientOptions.providerOverride,
         agentId: clientOptions.agentId,
+        agentType: clientOptions.agentType,
       }),
     async (anthropic, attempt, context) => {
       const start = Date.now()
@@ -1822,6 +1825,7 @@ async function* queryModel(
           source: options.querySource,
           providerOverride: options.providerOverride,
           agentId: options.agentId,
+          agentType: options.agentType,
         }),
       async (anthropic, attempt, context) => {
         attemptNumber = attempt
@@ -2588,7 +2592,7 @@ async function* queryModel(
           : 'other') as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
       })
       const result = yield* executeNonStreamingRequest(
-        { model: options.model, source: options.querySource, providerOverride: options.providerOverride, agentId: options.agentId },
+        { model: options.model, source: options.querySource, providerOverride: options.providerOverride, agentId: options.agentId, agentType: options.agentType },
         {
           model: options.model,
           fallbackModel: options.fallbackModel,
@@ -2687,7 +2691,7 @@ async function* queryModel(
       try {
         // Fall back to non-streaming mode
         const result = yield* executeNonStreamingRequest(
-          { model: options.model, source: options.querySource, agentId: options.agentId },
+          { model: options.model, source: options.querySource, agentId: options.agentId, agentType: options.agentType },
           {
             model: options.model,
             fallbackModel: options.fallbackModel,

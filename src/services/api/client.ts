@@ -98,6 +98,7 @@ export async function getAnthropicClient({
   source,
   providerOverride,
   agentId,
+  agentType,
 }: {
   apiKey?: string
   maxRetries: number
@@ -106,6 +107,7 @@ export async function getAnthropicClient({
   source?: string
   providerOverride?: { model: string; baseURL: string; apiKey: string }
   agentId?: string
+  agentType?: string
 }): Promise<Anthropic> {
   const containerId = process.env.CLAUDE_CODE_CONTAINER_ID
   const remoteSessionId = process.env.CLAUDE_CODE_REMOTE_SESSION_ID
@@ -124,6 +126,8 @@ export async function getAnthropicClient({
     ...(clientApp ? { 'x-client-app': clientApp } : {}),
     // Add agent ID header for all agent requests (works with all providers including local)
     ...(agentId ? { 'x-agent-id': agentId } : {}),
+    // Add agent type header for analytics tracking
+    ...(agentType ? { 'x-agent-type': agentType } : {}),
   }
 
   //debug Agent Id

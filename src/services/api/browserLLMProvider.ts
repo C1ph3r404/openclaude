@@ -89,6 +89,43 @@ export async function deleteChat(): Promise<{ success: boolean; error?: string }
 }
 
 /**
+ * Create a new chat session without deleting the current chat
+ */
+export async function newChatSession(): Promise<{ success: boolean; chatId?: string; error?: string }> {
+    if (!config) {
+        return { success: false, error: 'BrowserLLM provider not initialized' };
+    }
+
+    try {
+        const response = await fetch(`${config.baseUrl}/new-chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            return {
+                success: false,
+                error: errorData.message || `HTTP ${response.status}`,
+            };
+        }
+
+        const data = await response.json();
+
+        return {
+            success: data.success ?? true,
+            chatId: data.chatId,
+            error: data.message,
+        };
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return { success: false, error: `Failed to create new chat: ${errorMessage}` };
+    }
+}
+
+/**
  * Set the chat ID to resume a specific ChatGPT conversation
  */
 export async function setChatId(chatId: string): Promise<{ success: boolean; error?: string }> {
