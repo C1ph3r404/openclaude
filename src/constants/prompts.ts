@@ -702,7 +702,7 @@ export async function computeSimpleEnvInfo(
   ].filter(item => item !== null)
 
   return [
-    `# Environment`,
+    `<env># Environment`,
     `You have been invoked in the following environment: `,
     ...prependBullets(envItems),
   ].join(`\n`)

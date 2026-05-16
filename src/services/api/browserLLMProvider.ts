@@ -3,6 +3,7 @@
  * Handles communication with BrowserLLM server for chat management
  */
 
+
 interface BrowserLLMConfig {
     baseUrl: string;
 }
@@ -15,6 +16,8 @@ let config: BrowserLLMConfig | null = null;
 export function initBrowserLLMProvider(baseUrl: string): void {
     config = { baseUrl };
 }
+
+
 
 /**
  * Get current configuration

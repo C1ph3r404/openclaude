@@ -10,6 +10,8 @@ import { getLocalOpenAICompatibleProviderLabel } from '../utils/providerDiscover
 import { getSettings_DEPRECATED } from '../utils/settings/settings.js'
 import { parseUserSpecifiedModel } from '../utils/model/model.js'
 import { isBrowserLLMUrl, initBrowserLLMProvider } from '../services/api/browserLLMProvider.js'
+import { spawn } from 'child_process'
+import { resolve } from 'path'
 
 declare const MACRO: { VERSION: string; DISPLAY_VERSION?: string }
 
@@ -253,4 +255,5 @@ export function printStartupScreen(): void {
   out.push('')
 
   process.stdout.write(out.join('\n') + '\n')
+
 }

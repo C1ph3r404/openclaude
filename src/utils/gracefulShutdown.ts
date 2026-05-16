@@ -256,7 +256,7 @@ export const setupGracefulShutdown = memoize(() => {
   // unload() never runs and removeListener is never called. Harmless under
   // Node.js — the pin also ensures signal-exit's process.exit hook stays
   // active for Ink cleanup.
-  onExit(() => {})
+  onExit(() => { })
 
   process.on('SIGINT', () => {
     // In print mode, print.ts registers its own SIGINT handler that aborts
@@ -325,10 +325,10 @@ export const setupGracefulShutdown = memoize(() => {
     const errorInfo =
       reason instanceof Error
         ? {
-            error_name: reason.name,
-            error_message: reason.message.slice(0, 2000),
-            error_stack: reason.stack?.slice(0, 4000),
-          }
+          error_name: reason.name,
+          error_message: reason.message.slice(0, 2000),
+          error_stack: reason.stack?.slice(0, 4000),
+        }
         : { error_message: String(reason).slice(0, 2000) }
     logForDiagnosticsNoPII('error', 'unhandled_rejection', errorInfo)
     logEvent('tengu_unhandled_rejection', {
@@ -360,7 +360,7 @@ export function gracefulShutdownSync(
     })
     // Prevent unhandled rejection: forceExit re-throws in test mode,
     // which would escape the .catch() handler above as a new rejection.
-    .catch(() => {})
+    .catch(() => { })
 }
 
 let shutdownInProgress = false
