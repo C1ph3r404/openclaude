@@ -14,6 +14,7 @@ import { useKeybinding, useKeybindings } from '../keybindings/useKeybinding.js';
 import type { Message, PartialCompactDirection, UserMessage } from '../types/message.js';
 import { stripDisplayTags } from '../utils/displayTags.js';
 import { createUserMessage, extractTag, isEmptyMessageText, isSyntheticMessage, isToolUseResultMessage } from '../utils/messages.js';
+import { selectableUserMessagesFilter, messagesAfterAreOnlySynthetic } from '../utils/messageFilters.js';
 import { type OptionWithDescription, Select } from './CustomSelect/select.js';
 import { Spinner } from './Spinner.js';
 function isTextBlock(block: ContentBlockParam): block is TextBlockParam {
@@ -183,7 +184,7 @@ export function MessageSelector({
       return;
     }
     if (option === 'nevermind') {
-      if (preselectedMessage) onClose();else setMessageToRestore(undefined);
+      if (preselectedMessage) onClose(); else setMessageToRestore(undefined);
       return;
     }
     if (isSummarizeOption(option)) {
@@ -313,50 +314,50 @@ export function MessageSelector({
   const canRestoreCode_0 = isFileHistoryEnabled && diffStatsForRestore?.filesChanged && diffStatsForRestore.filesChanged.length > 0;
   const showPickList = !error && !messageToRestore && !preselectedMessage && hasMessagesToSelect;
   return <Box flexDirection="column" width="100%">
-      <Divider color="suggestion" />
-      <Box flexDirection="column" marginX={1} gap={1}>
-        <Text bold color="suggestion">
-          Rewind
-        </Text>
+    <Divider color="suggestion" />
+    <Box flexDirection="column" marginX={1} gap={1}>
+      <Text bold color="suggestion">
+        Rewind
+      </Text>
 
-        {error && <>
-            <Text color="error">Error: {error}</Text>
-          </>}
-        {!hasMessagesToSelect && <>
-            <Text>Nothing to rewind to yet.</Text>
-          </>}
-        {!error && messageToRestore && hasMessagesToSelect && <>
-            <Text>
-              Confirm you want to restore{' '}
-              {!diffStatsForRestore && 'the conversation '}to the point before
-              you sent this message:
-            </Text>
-            <Box flexDirection="column" paddingLeft={1} borderStyle="single" borderRight={false} borderTop={false} borderBottom={false} borderLeft={true} borderLeftDimColor>
-              <UserMessageOption userMessage={messageToRestore} color="text" isCurrent={false} />
-              <Text dimColor>
-                ({formatRelativeTimeAgo(new Date(messageToRestore.timestamp))})
-              </Text>
-            </Box>
-            <RestoreOptionDescription selectedRestoreOption={selectedRestoreOption} canRestoreCode={!!canRestoreCode_0} diffStatsForRestore={diffStatsForRestore} />
-            {isRestoring && isSummarizeOption(restoringOption) ? <Box flexDirection="row" gap={1}>
-                <Spinner />
-                <Text>Summarizing…</Text>
-              </Box> : <Select isDisabled={isRestoring} options={getRestoreOptions(!!canRestoreCode_0)} defaultFocusValue={canRestoreCode_0 ? 'both' : 'conversation'} onFocus={value => setSelectedRestoreOption(value as RestoreOption)} onChange={value_0 => onSelectRestoreOption(value_0 as RestoreOption)} onCancel={() => preselectedMessage ? onClose() : setMessageToRestore(undefined)} />}
-            {canRestoreCode_0 && <Box marginBottom={1}>
-                <Text dimColor>
-                  {figures.warning} Rewinding does not affect files edited
-                  manually or via bash.
-                </Text>
-              </Box>}
-          </>}
-        {showPickList && <>
-            {isFileHistoryEnabled ? <Text>
-                Restore the code and/or conversation to the point before…
-              </Text> : <Text>
-                Restore and fork the conversation to the point before…
-              </Text>}
-            <Box width="100%" flexDirection="column">
-              {messageOptions.slice(firstVisibleIndex, firstVisibleIndex + MAX_VISIBLE_MESSAGES).map((msg, visibleOptionIndex) => {
+      {error && <>
+        <Text color="error">Error: {error}</Text>
+      </>}
+      {!hasMessagesToSelect && <>
+        <Text>Nothing to rewind to yet.</Text>
+      </>}
+      {!error && messageToRestore && hasMessagesToSelect && <>
+        <Text>
+          Confirm you want to restore{' '}
+          {!diffStatsForRestore && 'the conversation '}to the point before
+          you sent this message:
+        </Text>
+        <Box flexDirection="column" paddingLeft={1} borderStyle="single" borderRight={false} borderTop={false} borderBottom={false} borderLeft={true} borderLeftDimColor>
+          <UserMessageOption userMessage={messageToRestore} color="text" isCurrent={false} />
+          <Text dimColor>
+            ({formatRelativeTimeAgo(new Date(messageToRestore.timestamp))})
+          </Text>
+        </Box>
+        <RestoreOptionDescription selectedRestoreOption={selectedRestoreOption} canRestoreCode={!!canRestoreCode_0} diffStatsForRestore={diffStatsForRestore} />
+        {isRestoring && isSummarizeOption(restoringOption) ? <Box flexDirection="row" gap={1}>
+          <Spinner />
+          <Text>Summarizing…</Text>
+        </Box> : <Select isDisabled={isRestoring} options={getRestoreOptions(!!canRestoreCode_0)} defaultFocusValue={canRestoreCode_0 ? 'both' : 'conversation'} onFocus={value => setSelectedRestoreOption(value as RestoreOption)} onChange={value_0 => onSelectRestoreOption(value_0 as RestoreOption)} onCancel={() => preselectedMessage ? onClose() : setMessageToRestore(undefined)} />}
+        {canRestoreCode_0 && <Box marginBottom={1}>
+          <Text dimColor>
+            {figures.warning} Rewinding does not affect files edited
+            manually or via bash.
+          </Text>
+        </Box>}
+      </>}
+      {showPickList && <>
+        {isFileHistoryEnabled ? <Text>
+          Restore the code and/or conversation to the point before…
+        </Text> : <Text>
+          Restore and fork the conversation to the point before…
+        </Text>}
+        <Box width="100%" flexDirection="column">
+          {messageOptions.slice(firstVisibleIndex, firstVisibleIndex + MAX_VISIBLE_MESSAGES).map((msg, visibleOptionIndex) => {
             const optionIndex = firstVisibleIndex + visibleOptionIndex;
             const isSelected = optionIndex === selectedIndex;
             const isCurrent = msg.uuid === currentUUID;
@@ -364,40 +365,40 @@ export function MessageSelector({
             const metadata = fileHistoryMetadata[optionIndex];
             const numFilesChanged = metadata?.filesChanged && metadata.filesChanged.length;
             return <Box key={msg.uuid} height={isFileHistoryEnabled ? 3 : 2} overflow="hidden" width="100%" flexDirection="row">
-                      <Box width={2} minWidth={2}>
-                        {isSelected ? <Text color="permission" bold>
-                            {figures.pointer}{' '}
-                          </Text> : <Text>{'  '}</Text>}
-                      </Box>
-                      <Box flexDirection="column">
-                        <Box flexShrink={1} height={1} overflow="hidden">
-                          <UserMessageOption userMessage={msg} color={isSelected ? 'suggestion' : undefined} isCurrent={isCurrent} paddingRight={10} />
-                        </Box>
-                        {isFileHistoryEnabled && metadataLoaded && <Box height={1} flexDirection="row">
-                            {metadata ? <>
-                                <Text dimColor={!isSelected} color="inactive">
-                                  {numFilesChanged ? <>
-                                      {numFilesChanged === 1 && metadata.filesChanged![0] ? `${path.basename(metadata.filesChanged![0])} ` : `${numFilesChanged} files changed `}
-                                      <DiffStatsText diffStats={metadata} />
-                                    </> : <>No code changes</>}
-                                </Text>
-                              </> : <Text dimColor color="warning">
-                                {figures.warning} No code restore
-                              </Text>}
-                          </Box>}
-                      </Box>
-                    </Box>;
+              <Box width={2} minWidth={2}>
+                {isSelected ? <Text color="permission" bold>
+                  {figures.pointer}{' '}
+                </Text> : <Text>{'  '}</Text>}
+              </Box>
+              <Box flexDirection="column">
+                <Box flexShrink={1} height={1} overflow="hidden">
+                  <UserMessageOption userMessage={msg} color={isSelected ? 'suggestion' : undefined} isCurrent={isCurrent} paddingRight={10} />
+                </Box>
+                {isFileHistoryEnabled && metadataLoaded && <Box height={1} flexDirection="row">
+                  {metadata ? <>
+                    <Text dimColor={!isSelected} color="inactive">
+                      {numFilesChanged ? <>
+                        {numFilesChanged === 1 && metadata.filesChanged![0] ? `${path.basename(metadata.filesChanged![0])} ` : `${numFilesChanged} files changed `}
+                        <DiffStatsText diffStats={metadata} />
+                      </> : <>No code changes</>}
+                    </Text>
+                  </> : <Text dimColor color="warning">
+                    {figures.warning} No code restore
+                  </Text>}
+                </Box>}
+              </Box>
+            </Box>;
           })}
-            </Box>
-          </>}
-        {!messageToRestore && <Text dimColor italic>
-            {exitState.pending ? <>Press {exitState.keyName} again to exit</> : <>
-                {!error && hasMessagesToSelect && 'Enter to continue · '}Esc to
-                exit
-              </>}
-          </Text>}
-      </Box>
-    </Box>;
+        </Box>
+      </>}
+      {!messageToRestore && <Text dimColor italic>
+        {exitState.pending ? <>Press {exitState.keyName} again to exit</> : <>
+          {!error && hasMessagesToSelect && 'Enter to continue · '}Esc to
+          exit
+        </>}
+      </Text>}
+    </Box>
+  </Box>;
 }
 function getRestoreOptionConversationText(option: RestoreOption): string {
   switch (option) {
@@ -763,68 +764,4 @@ function computeDiffStatsBetweenMessages(messages: Message[], fromMessageId: UUI
     insertions,
     deletions
   };
-}
-export function selectableUserMessagesFilter(message: Message): message is UserMessage {
-  if (message.type !== 'user') {
-    return false;
-  }
-  if (Array.isArray(message.message.content) && message.message.content[0]?.type === 'tool_result') {
-    return false;
-  }
-  if (isSyntheticMessage(message)) {
-    return false;
-  }
-  if (message.isMeta) {
-    return false;
-  }
-  if (message.isCompactSummary || message.isVisibleInTranscriptOnly) {
-    return false;
-  }
-  const content = message.message.content;
-  const lastBlock = typeof content === 'string' ? null : content[content.length - 1];
-  const messageText = typeof content === 'string' ? content.trim() : lastBlock && isTextBlock(lastBlock) ? lastBlock.text.trim() : '';
-
-  // Filter out non-user-authored messages (command outputs, task notifications, ticks).
-  if (messageText.indexOf(`<${LOCAL_COMMAND_STDOUT_TAG}>`) !== -1 || messageText.indexOf(`<${LOCAL_COMMAND_STDERR_TAG}>`) !== -1 || messageText.indexOf(`<${BASH_STDOUT_TAG}>`) !== -1 || messageText.indexOf(`<${BASH_STDERR_TAG}>`) !== -1 || messageText.indexOf(`<${TASK_NOTIFICATION_TAG}>`) !== -1 || messageText.indexOf(`<${TICK_TAG}>`) !== -1 || messageText.indexOf(`<${TEAMMATE_MESSAGE_TAG}`) !== -1) {
-    return false;
-  }
-  return true;
-}
-
-/**
- * Checks if all messages after the given index are synthetic (interruptions, cancels, etc.)
- * or non-meaningful content. Returns true if there's nothing meaningful to confirm -
- * for example, if the user hit enter then immediately cancelled.
- */
-export function messagesAfterAreOnlySynthetic(messages: Message[], fromIndex: number): boolean {
-  for (let i = fromIndex + 1; i < messages.length; i++) {
-    const msg = messages[i];
-    if (!msg) continue;
-
-    // Skip known non-meaningful message types
-    if (isSyntheticMessage(msg)) continue;
-    if (isToolUseResultMessage(msg)) continue;
-    if (msg.type === 'progress') continue;
-    if (msg.type === 'system') continue;
-    if (msg.type === 'attachment') continue;
-    if (msg.type === 'user' && msg.isMeta) continue;
-
-    // Assistant with actual content = meaningful
-    if (msg.type === 'assistant') {
-      const content = msg.message.content;
-      if (Array.isArray(content)) {
-        const hasMeaningfulContent = content.some(block => block.type === 'text' && block.text.trim() || block.type === 'tool_use');
-        if (hasMeaningfulContent) return false;
-      }
-      continue;
-    }
-
-    // User messages that aren't synthetic or meta = meaningful
-    if (msg.type === 'user') {
-      return false;
-    }
-
-    // Other types (e.g., tombstone) are non-meaningful, continue
-  }
-  return true;
 }

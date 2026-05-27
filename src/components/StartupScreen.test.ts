@@ -1,7 +1,37 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { detectProvider } from './StartupScreen.js'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test'
+
+const actualSettings = await import('../utils/settings/settings.js')
+import {
+  acquireSharedMutationLock,
+  releaseSharedMutationLock,
+} from '../test/sharedMutationLock.js'
+
+beforeAll(async () => {
+  await acquireSharedMutationLock('StartupScreen.test.ts')
+  mock.module('../utils/settings/settings.js', () => ({
+    ...actualSettings,
+    getSettings_DEPRECATED: () => ({}),
+  }))
+})
+
+afterAll(() => {
+  try {
+    mock.restore()
+  } finally {
+    releaseSharedMutationLock()
+  }
+})
+
+import stripAnsi from 'strip-ansi'
+import { detectProvider, printStartupScreen } from './StartupScreen.js'
+import { getGlobalConfig, saveGlobalConfig } from '../utils/config.js'
+import {
+  resetSettingsCache,
+  setSessionSettingsCache,
+} from '../utils/settings/settingsCache.js'
 
 const ENV_KEYS = [
+  'CI',
   'CLAUDE_CODE_USE_OPENAI',
   'CLAUDE_CODE_USE_GEMINI',
   'CLAUDE_CODE_USE_GITHUB',
@@ -14,20 +44,46 @@ const ENV_KEYS = [
   'GEMINI_MODEL',
   'MISTRAL_MODEL',
   'ANTHROPIC_MODEL',
+  'CLAUDE_MODEL',
   'NVIDIA_NIM',
   'MINIMAX_API_KEY',
+  'XAI_API_KEY',
+  'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  'ANTHROPIC_BASE_URL',
 ]
 
 const originalEnv: Record<string, string | undefined> = {}
+const originalMacro = (globalThis as Record<string, unknown>).MACRO
+const originalIsTTY = process.stdout.isTTY
+const originalWrite = process.stdout.write
+const originalModel = getGlobalConfig().model
 
 beforeEach(() => {
   for (const key of ENV_KEYS) {
     originalEnv[key] = process.env[key]
     delete process.env[key]
   }
+  setSessionSettingsCache({ settings: {}, errors: [] })
+  saveGlobalConfig(current => ({
+    ...current,
+    model: undefined,
+  }))
 })
 
 afterEach(() => {
+  resetSettingsCache()
+  saveGlobalConfig(current => ({
+    ...current,
+    model: originalModel,
+  }))
+  ;(globalThis as Record<string, unknown>).MACRO = originalMacro
+  Object.defineProperty(process.stdout, 'isTTY', {
+    configurable: true,
+    value: originalIsTTY,
+  })
+  process.stdout.write = originalWrite
   for (const key of ENV_KEYS) {
     if (originalEnv[key] === undefined) {
       delete process.env[key]
@@ -43,6 +99,30 @@ function setupOpenAIMode(baseUrl: string, model: string): void {
   process.env.OPENAI_MODEL = model
   process.env.OPENAI_API_KEY = 'test-key'
 }
+
+describe('printStartupScreen logo', () => {
+  test('renders CLAUDE with a D-shaped D instead of an O-shaped block', () => {
+    ;(globalThis as Record<string, unknown>).MACRO = { VERSION: 'test-version' }
+    Object.defineProperty(process.stdout, 'isTTY', {
+      configurable: true,
+      value: true,
+    })
+
+    let output = ''
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      output += chunk.toString()
+      return true
+    }) as typeof process.stdout.write
+
+    printStartupScreen()
+
+    const plainOutput = stripAnsi(output)
+    expect(plainOutput).toContain('███████╗ ████████╗')
+    expect(plainOutput).toContain('██╔═══██╗ ██╔═════╝')
+    expect(plainOutput).toContain('███████╔╝ ████████╗')
+    expect(plainOutput).not.toContain('████████║ ████████╗')
+  })
+})
 
 // --- Issue #855: aggregator URL must win over vendor-prefixed model name ---
 
@@ -111,9 +191,14 @@ describe('detectProvider — direct vendor endpoints', () => {
     expect(detectProvider().name).toBe('Moonshot AI - API')
   })
 
-  test('api.mistral.ai labels as Mistral', () => {
+  test('api.mistral.ai labels from descriptor route metadata', () => {
     setupOpenAIMode('https://api.mistral.ai/v1', 'mistral-large-latest')
-    expect(detectProvider().name).toBe('Mistral')
+    expect(detectProvider().name).toBe('Mistral AI')
+  })
+
+  test('api.z.ai labels from descriptor route metadata', () => {
+    setupOpenAIMode('https://api.z.ai/api/coding/paas/v4', 'GLM-5.1')
+    expect(detectProvider().name).toBe('Z.AI')
   })
 
   test('default OpenAI URL + gpt-4o labels as OpenAI', () => {
@@ -149,6 +234,21 @@ describe('detectProvider — rawModel fallback when URL is generic', () => {
     setupOpenAIMode('https://my-proxy.internal/v1', 'mistral-large-latest')
     expect(detectProvider().name).toBe('Mistral')
   })
+
+  test('custom proxy + exact uppercase GLM ID stays generic without route metadata', () => {
+    setupOpenAIMode('https://my-proxy.internal/v1', 'GLM-5.1')
+    expect(detectProvider().name).toBe('OpenAI')
+  })
+
+  test('custom proxy + lowercase glm ID stays generic OpenAI', () => {
+    setupOpenAIMode('https://my-proxy.internal/v1', 'glm-5.1')
+    expect(detectProvider().name).toBe('OpenAI')
+  })
+
+  test('DashScope lowercase glm ID is not mislabeled as Z.AI', () => {
+    setupOpenAIMode('https://dashscope.aliyuncs.com/compatible-mode/v1', 'glm-5.1')
+    expect(detectProvider().name).toBe('OpenAI')
+  })
 })
 
 // --- Explicit env flags win over URL heuristics ---
@@ -164,5 +264,75 @@ describe('detectProvider — explicit dedicated-provider env flags', () => {
     setupOpenAIMode('https://openrouter.ai/api/v1', 'any-model')
     process.env.MINIMAX_API_KEY = 'test-key'
     expect(detectProvider().name).toBe('MiniMax')
+  })
+})
+
+// --- modelOverride from --model flag ---
+
+describe('detectProvider — modelOverride from --model flag', () => {
+  test('modelOverride overrides default Anthropic model', () => {
+    const result = detectProvider('claude-opus-4-6')
+    expect(result.name).toBe('Anthropic')
+    expect(result.model).toContain('opus')
+  })
+
+  test('modelOverride alias is resolved for Anthropic', () => {
+    const result = detectProvider('opus')
+    expect(result.name).toBe('Anthropic')
+    expect(result.model).toContain('opus')
+  })
+
+  test('modelOverride takes priority over ANTHROPIC_MODEL env var', () => {
+    process.env.ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001'
+    const result = detectProvider('claude-opus-4-6')
+    expect(result.name).toBe('Anthropic')
+    expect(result.model).toContain('opus')
+  })
+
+  test('modelOverride takes priority over CLAUDE_MODEL env var', () => {
+    process.env.CLAUDE_MODEL = 'claude-haiku-4-5-20251001'
+    const result = detectProvider('claude-opus-4-6')
+    expect(result.name).toBe('Anthropic')
+    expect(result.model).toContain('opus')
+  })
+
+  test('modelOverride works for OpenAI provider', () => {
+    process.env.CLAUDE_CODE_USE_OPENAI = '1'
+    process.env.OPENAI_API_KEY = 'test-key'
+    process.env.OPENAI_MODEL = 'gpt-4o'
+    const result = detectProvider('gpt-4-turbo')
+    expect(result.model).toContain('gpt-4-turbo')
+  })
+
+  test('modelOverride works for Gemini provider', () => {
+    process.env.CLAUDE_CODE_USE_GEMINI = '1'
+    const result = detectProvider('gemini-2.5-pro')
+    expect(result.model).toBe('gemini-2.5-pro')
+  })
+
+  test('modelOverride works for Mistral provider', () => {
+    process.env.CLAUDE_CODE_USE_MISTRAL = '1'
+    const result = detectProvider('mistral-large-latest')
+    expect(result.model).toBe('mistral-large-latest')
+  })
+
+  test('modelOverride works for GitHub provider', () => {
+    process.env.CLAUDE_CODE_USE_GITHUB = '1'
+    const result = detectProvider('gpt-4o')
+    expect(result.model).toContain('gpt-4o')
+  })
+
+  test('undefined modelOverride preserves default behavior', () => {
+    process.env.ANTHROPIC_MODEL = 'claude-sonnet-4-6'
+    const result = detectProvider(undefined)
+    expect(result.name).toBe('Anthropic')
+    expect(result.model).toContain('sonnet')
+  })
+
+  test('no argument preserves default behavior', () => {
+    process.env.ANTHROPIC_MODEL = 'claude-sonnet-4-6'
+    const result = detectProvider()
+    expect(result.name).toBe('Anthropic')
+    expect(result.model).toContain('sonnet')
   })
 })

@@ -210,11 +210,6 @@ import {
   stopSessionActivity,
 } from '../../utils/sessionActivity.js'
 import { jsonStringify } from '../../utils/slowOperations.js'
-import {
-  isBetaTracingEnabled,
-  type LLMRequestNewContext,
-  startLLMRequestSpan,
-} from '../../utils/telemetry/sessionTracing.js'
 /* eslint-enable @typescript-eslint/no-require-imports */
 import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -846,6 +841,7 @@ export async function* executeNonStreamingRequest(
     providerOverride?: Options['providerOverride']
     agentId?: string
     agentType?: string
+    effortValue?: EffortValue
   },
   retryOptions: {
     model: string
@@ -874,8 +870,7 @@ export async function* executeNonStreamingRequest(
         fetchOverride: clientOptions.fetchOverride,
         source: clientOptions.source,
         providerOverride: clientOptions.providerOverride,
-        agentId: clientOptions.agentId,
-        agentType: clientOptions.agentType,
+        effortValue: clientOptions.effortValue,
       }),
     async (anthropic, attempt, context) => {
       const start = Date.now()
@@ -1297,6 +1292,21 @@ async function* queryModel(
   let messagesForAPI = normalizeMessagesForAPI(messages, filteredTools)
   queryCheckpoint('query_message_normalization_end')
 
+  // Apply hybrid context strategy for optimal cache/fresh balance
+  if (feature('HYBRID_CONTEXT_STRATEGY')) {
+    const { applyHybridStrategy } = await import('../../utils/hybridContextStrategy.js')
+    // Cap at 200k to avoid edge case with very large context windows
+    const strategyResult = applyHybridStrategy(messagesForAPI, {
+      cacheWeight: 0.4,
+      freshWeight: 0.6,
+      maxTotalTokens: Math.min(
+        getContextWindowForModel(model, getSdkBetas()) - COMPACT_MAX_OUTPUT_TOKENS,
+        200000
+      ),
+    })
+    messagesForAPI = strategyResult.selectedMessages
+  }
+
   // Model-specific post-processing: strip tool-search-specific fields if the
   // selected model doesn't support tool search.
   //
@@ -1410,9 +1420,6 @@ async function* queryModel(
   })
   const useBetas = betas.length > 0
 
-  // Build minimal context for detailed tracing (when beta tracing is enabled)
-  // Note: The actual new_context message extraction is done in sessionTracing.ts using
-  // hash-based tracking per querySource (agent) from the messagesForAPI array
   const extraToolSchemas = [...(options.extraToolSchemas ?? [])]
   if (advisorModel) {
     // Server tools must be in the tools array by API contract. Appended after
@@ -1519,23 +1526,6 @@ async function* queryModel(
       extraBodyParams: getExtraBodyParams(),
     })
   }
-
-  const newContext: LLMRequestNewContext | undefined = isBetaTracingEnabled()
-    ? {
-      systemPrompt: systemPrompt.join('\n\n'),
-      querySource: options.querySource,
-      tools: jsonStringify(allTools),
-    }
-    : undefined
-
-  // Capture the span so we can pass it to endLLMRequestSpan later
-  // This ensures responses are matched to the correct request when multiple requests run in parallel
-  const llmSpan = startLLMRequestSpan(
-    options.model,
-    newContext,
-    messagesForAPI,
-    isFastMode,
-  )
 
   const startIncludingRetries = Date.now()
   let start = Date.now()
@@ -1826,6 +1816,7 @@ async function* queryModel(
           providerOverride: options.providerOverride,
           agentId: options.agentId,
           agentType: options.agentType,
+          effortValue: effort,
         }),
       async (anthropic, attempt, context) => {
         attemptNumber = attempt
@@ -2592,7 +2583,7 @@ async function* queryModel(
           : 'other') as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
       })
       const result = yield* executeNonStreamingRequest(
-        { model: options.model, source: options.querySource, providerOverride: options.providerOverride, agentId: options.agentId, agentType: options.agentType },
+        { model: options.model, source: options.querySource, providerOverride: options.providerOverride, agentId: options.agentId, agentType: options.agentType, effortValue: effort },
         {
           model: options.model,
           fallbackModel: options.fallbackModel,
@@ -2691,7 +2682,7 @@ async function* queryModel(
       try {
         // Fall back to non-streaming mode
         const result = yield* executeNonStreamingRequest(
-          { model: options.model, source: options.querySource, agentId: options.agentId, agentType: options.agentType },
+          { model: options.model, source: options.querySource, agentId: options.agentId, agentType: options.agentType, effortValue: effort },
           {
             model: options.model,
             fallbackModel: options.fallbackModel,
@@ -2775,7 +2766,6 @@ async function* queryModel(
           didFallBackToNonStreaming,
           queryTracking: options.queryTracking,
           querySource: options.querySource,
-          llmSpan,
           fastMode: isFastModeRequest,
           previousRequestId,
         })
@@ -2831,7 +2821,6 @@ async function* queryModel(
         didFallBackToNonStreaming,
         queryTracking: options.queryTracking,
         querySource: options.querySource,
-        llmSpan,
         fastMode: isFastModeRequest,
         previousRequestId,
       })
@@ -2919,10 +2908,8 @@ async function* queryModel(
       costUSD,
       queryTracking: options.queryTracking,
       permissionMode: permissionContext.mode,
-      // Pass newMessages for beta tracing - extraction happens in logging.ts
-      // only when beta tracing is enabled
+      // Pass newMessages for content-length extraction in logging.ts
       newMessages,
-      llmSpan,
       globalCacheStrategy,
       requestSetupMs: start - startIncludingRetries,
       attemptStartTimes,

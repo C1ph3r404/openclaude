@@ -77,7 +77,9 @@ import {
 import { notifyCommandLifecycle } from './utils/commandLifecycle.js'
 import { headlessProfilerCheckpoint } from './utils/headlessProfiler.js'
 import {
+  getDefaultMainLoopModelSetting,
   getRuntimeMainLoopModel,
+  parseUserSpecifiedModel,
   renderModelName,
 } from './utils/model/model.js'
 import {
@@ -98,6 +100,7 @@ import { applyToolResultBudget } from './utils/toolResultStorage.js'
 import { recordContentReplacement } from './utils/sessionStorage.js'
 import { handleStopHooks } from './query/stopHooks.js'
 import { buildQueryConfig } from './query/config.js'
+import { getGlobalConfig } from './utils/config.js'
 import { productionDeps, type QueryDeps } from './query/deps.js'
 import type { Terminal, Continue } from './query/transitions.js'
 import { feature } from 'bun:bundle'
@@ -108,7 +111,6 @@ import {
 } from './bootstrap/state.js'
 import { createBudgetTracker, checkTokenBudget } from './query/tokenBudget.js'
 import { count } from './utils/array.js'
-
 /* eslint-disable @typescript-eslint/no-require-imports */
 const snipModule = feature('HISTORY_SNIP')
   ? (require('./services/compact/snipCompact.js') as typeof import('./services/compact/snipCompact.js'))
@@ -388,7 +390,7 @@ async function* queryLoop(
       messagesForQuery.length > 0
     ) {
       const { updateArcPhase } = await import('./utils/conversationArc.js')
-      updateArcPhase([messagesForQuery[messagesForQuery.length - 1]])
+      await updateArcPhase([messagesForQuery[messagesForQuery.length - 1]])
     }
 
     let tracking = autoCompactTracking
@@ -479,8 +481,27 @@ async function* queryLoop(
       messagesForQuery = collapseResult.messages
     }
 
+    // arcSummary must be a separate array element; concatenating it into a
+    // template string makes [...systemPrompt] spread chars, shredding the prompt.
+    let promptWithArc: readonly string[] = systemPrompt
+    if (feature('CONVERSATION_ARC')) {
+      if (getGlobalConfig().knowledgeGraphEnabled) {
+        const lastMessage = messagesForQuery[messagesForQuery.length - 1]
+        const userQueryText =
+          lastMessage?.type === 'user' &&
+            typeof lastMessage.message.content === 'string'
+            ? lastMessage.message.content
+            : ''
+        const { getArcSummary } = await import('./utils/conversationArc.js')
+        const arcSummary = await getArcSummary(userQueryText)
+        if (arcSummary) {
+          promptWithArc = [...systemPrompt, arcSummary]
+        }
+      }
+    }
+
     const fullSystemPrompt = asSystemPrompt(
-      appendSystemContext(systemPrompt, systemContext),
+      appendSystemContext(asSystemPrompt(promptWithArc), systemContext),
     )
 
     queryCheckpoint('query_autocompact_start')
@@ -602,9 +623,13 @@ async function* queryLoop(
 
     const appState = toolUseContext.getAppState()
     const permissionMode = appState.toolPermissionContext.mode
+    const appStateMainLoopModel =
+      appState.mainLoopModelForSession ??
+      appState.mainLoopModel ??
+      getDefaultMainLoopModelSetting()
     let currentModel = getRuntimeMainLoopModel({
       permissionMode,
-      mainLoopModel: toolUseContext.options.mainLoopModel,
+      mainLoopModel: parseUserSpecifiedModel(appStateMainLoopModel),
       exceeds200kTokens:
         permissionMode === 'plan' &&
         doesMostRecentAssistantMessageExceed200k(messagesForQuery),
@@ -1564,8 +1589,11 @@ async function* queryLoop(
       feature('CONVERSATION_ARC') &&
       getGlobalConfig().knowledgeGraphEnabled
     ) {
-      const { updateArcPhase } = await import('./utils/conversationArc.js')
-      updateArcPhase([assistantMessage])
+      const { updateArcPhase, finalizeArcTurn } = await import(
+        './utils/conversationArc.js'
+      )
+      await updateArcPhase([assistantMessage])
+      await finalizeArcTurn()
     }
 
     // Generate tool use summary after tool batch completes — passed to next recursive call
@@ -1872,6 +1900,7 @@ async function* queryLoop(
     }
 
     queryCheckpoint('query_recursive_call')
+
     const next: State = {
       messages: [...messagesForQuery, ...assistantMessages, ...toolResults],
       toolUseContext: toolUseContextWithQueryTracking,

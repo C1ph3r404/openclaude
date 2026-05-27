@@ -179,18 +179,18 @@ export function generateTmuxSessionName(
 
 type WorktreeCreateResult =
   | {
-      worktreePath: string
-      worktreeBranch: string
-      headCommit: string
-      existed: true
-    }
+    worktreePath: string
+    worktreeBranch: string
+    headCommit: string
+    existed: true
+  }
   | {
-      worktreePath: string
-      worktreeBranch: string
-      headCommit: string
-      baseBranch: string
-      existed: false
-    }
+    worktreePath: string
+    worktreeBranch: string
+    headCommit: string
+    baseBranch: string
+    existed: false
+  }
 
 const gitWorktreeMutationLocks = new Map<string, Promise<void>>()
 
@@ -203,10 +203,10 @@ export async function withGitWorktreeMutationLock<T>(
   const current = new Promise<void>(resolve => {
     releaseCurrent = resolve
   })
-  const next = previous.catch(() => {}).then(() => current)
+  const next = previous.catch(() => { }).then(() => current)
   gitWorktreeMutationLocks.set(repoRoot, next)
 
-  await previous.catch(() => {})
+  await previous.catch(() => { })
 
   try {
     return await fn()
@@ -250,6 +250,26 @@ function flattenSlug(slug: string): string {
 
 export function worktreeBranchName(slug: string): string {
   return `worktree-${flattenSlug(slug)}`
+}
+
+/**
+ * Builds a human-readable message for `git rev-parse <baseBranch>` failures
+ * during worktree creation. Surfaces git's stderr so users can distinguish
+ * empty repos ("unknown revision or path"), detached HEADs pointing at
+ * missing objects, and a missing git binary — each previously surfaced as
+ * the same useless `git rev-parse failed`. See #690.
+ */
+export function buildRevParseFailureMessage(
+  baseBranch: string,
+  stderr: string,
+  exitCode: number,
+): string {
+  const detail = stderr.trim() || `exit code ${exitCode}`
+  const hint =
+    baseBranch === 'HEAD'
+      ? ' (HEAD has no resolvable commit — make at least one commit, or check whether git is installed and on PATH)'
+      : ''
+  return `Failed to resolve base branch "${baseBranch}": ${detail}${hint}`
 }
 
 function worktreePathFor(repoRoot: string, slug: string): string {
@@ -346,14 +366,14 @@ async function getOrCreateWorktree(
     // For the fetch/PR-fetch paths we still need the SHA — the fs-only resolveRef
     // above only covers the "origin/<branch> already exists locally" case.
     if (!baseSha) {
-      const { stdout, code: shaCode } = await execFileNoThrowWithCwd(
+      const { stdout, stderr, code: shaCode } = await execFileNoThrowWithCwd(
         gitExe(),
         ['rev-parse', baseBranch],
         { cwd: repoRoot },
       )
       if (shaCode !== 0) {
         throw new Error(
-          `Failed to resolve base branch "${baseBranch}": git rev-parse failed`,
+          buildRevParseFailureMessage(baseBranch, stderr, shaCode),
         )
       }
       baseSha = stdout.trim()
@@ -774,7 +794,7 @@ export async function createWorktreeForSession(
     if (!gitRoot) {
       throw new Error(
         'Cannot create a worktree: not in a git repository and no WorktreeCreate hooks are configured. ' +
-          'Configure WorktreeCreate/WorktreeRemove hooks in settings.json to use worktree isolation with other VCS systems.',
+        'Configure WorktreeCreate/WorktreeRemove hooks in settings.json to use worktree isolation with other VCS systems.',
       )
     }
 
@@ -969,7 +989,7 @@ export async function createAgentWorktree(slug: string): Promise<{
   if (!gitRoot) {
     throw new Error(
       'Cannot create agent worktree: not in a git repository and no WorktreeCreate hooks are configured. ' +
-        'Configure WorktreeCreate/WorktreeRemove hooks in settings.json to use worktree isolation with other VCS systems.',
+      'Configure WorktreeCreate/WorktreeRemove hooks in settings.json to use worktree isolation with other VCS systems.',
     )
   }
 
@@ -1430,9 +1450,9 @@ export async function execIntoTmuxWorktree(args: string[]): Promise<{
     // biome-ignore lint/suspicious/noConsole: intentional user guidance
     console.log(
       `\n${y('╭─ iTerm2 Tip ────────────────────────────────────────────────────────╮')}\n` +
-        `${y('│')} To open as a tab instead of a new window:                           ${y('│')}\n` +
-        `${y('│')} iTerm2 > Settings > General > tmux > "Tabs in attaching window"     ${y('│')}\n` +
-        `${y('╰─────────────────────────────────────────────────────────────────────╯')}\n`,
+      `${y('│')} To open as a tab instead of a new window:                           ${y('│')}\n` +
+      `${y('│')} iTerm2 > Settings > General > tmux > "Tabs in attaching window"     ${y('│')}\n` +
+      `${y('╰─────────────────────────────────────────────────────────────────────╯')}\n`,
     )
   }
 

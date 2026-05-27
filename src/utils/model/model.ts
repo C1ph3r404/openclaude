@@ -28,6 +28,7 @@ import { LIGHTNING_BOLT } from '../../constants/figures.js'
 import { isModelAllowed } from './modelAllowlist.js'
 import { type ModelAlias, isModelAlias } from './aliases.js'
 import { capitalize } from '../stringUtils.js'
+import { DEFAULT_GEMINI_MODEL } from '../providerProfile.js'
 
 export type ModelShortName = string
 export type ModelName = string
@@ -71,6 +72,15 @@ export function getSmallFastModel(): ModelName {
   if (getAPIProvider() === 'minimax') {
     return process.env.OPENAI_MODEL || 'MiniMax-M2.5-highspeed'
   }
+  // Xiaomi MiMo — OPENAI_MODEL carries the active MiMo model; fall back to
+  // the fast tier when missing.
+  if (getAPIProvider() === 'xiaomi-mimo') {
+    return process.env.OPENAI_MODEL || 'mimo-v2-flash'
+  }
+  // xAI — OPENAI_MODEL carries the active Grok model; fall back to grok-3.
+  if (getAPIProvider() === 'xai') {
+    return process.env.OPENAI_MODEL || 'grok-3'
+  }
   return getDefaultHaikuModel()
 }
 
@@ -79,7 +89,8 @@ export function isNonCustomOpusModel(model: ModelName): boolean {
     model === getModelStrings().opus40 ||
     model === getModelStrings().opus41 ||
     model === getModelStrings().opus45 ||
-    model === getModelStrings().opus46
+    model === getModelStrings().opus46 ||
+    model === getModelStrings().opus47
   )
 }
 
@@ -119,7 +130,9 @@ export function getUserSpecifiedModelSetting(): ModelSetting | undefined {
       provider === 'codex' ||
       provider === 'github' ||
       provider === 'nvidia-nim' ||
-      provider === 'minimax'
+      provider === 'minimax' ||
+      provider === 'xiaomi-mimo' ||
+      provider === 'xai'
     specifiedModel =
       (provider === 'gemini' ? process.env.GEMINI_MODEL : undefined) ||
       (provider === 'mistral' ? process.env.MISTRAL_MODEL : undefined) ||
@@ -194,13 +207,21 @@ export function getDefaultOpusModel(): ModelName {
   if (getAPIProvider() === 'minimax') {
     return process.env.OPENAI_MODEL || 'MiniMax-M2.7'
   }
+  // Xiaomi MiMo — flagship tier for "opus"-equivalent.
+  if (getAPIProvider() === 'xiaomi-mimo') {
+    return process.env.OPENAI_MODEL || 'mimo-v2.5-pro'
+  }
+  // xAI — flagship Grok model for "opus"-equivalent.
+  if (getAPIProvider() === 'xai') {
+    return process.env.OPENAI_MODEL || 'grok-4.3'
+  }
   // 3P providers (Bedrock, Vertex, Foundry) — kept as a separate branch
-  // even when values match, since 3P availability lags firstParty and
-  // these will diverge again at the next model launch.
+  // since 3P availability lags firstParty and these will diverge again at
+  // the next model launch. Keep 3P on Opus 4.6 until they roll out 4.7.
   if (getAPIProvider() !== 'firstParty') {
     return getModelStrings().opus46
   }
-  return getModelStrings().opus46
+  return getModelStrings().opus47
 }
 
 // @[MODEL LAUNCH]: Update the default Sonnet model (3P providers may lag so keep defaults unchanged).
@@ -210,7 +231,7 @@ export function getDefaultSonnetModel(): ModelName {
   }
   // Gemini provider
   if (getAPIProvider() === 'gemini') {
-    return process.env.GEMINI_MODEL || 'gemini-2.0-flash'
+    return process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL
   }
   // Mistral provider
   if (getAPIProvider() === 'mistral') {
@@ -235,6 +256,14 @@ export function getDefaultSonnetModel(): ModelName {
   // MiniMax — mid tier for "sonnet"-equivalent.
   if (getAPIProvider() === 'minimax') {
     return process.env.OPENAI_MODEL || 'MiniMax-M2.5'
+  }
+  // Xiaomi MiMo — flagship model for "sonnet"-equivalent.
+  if (getAPIProvider() === 'xiaomi-mimo') {
+    return process.env.OPENAI_MODEL || 'mimo-v2.5-pro'
+  }
+  // xAI — flagship Grok model for "sonnet"-equivalent.
+  if (getAPIProvider() === 'xai') {
+    return process.env.OPENAI_MODEL || 'grok-4.3'
   }
   // Default to Sonnet 4.5 for 3P since they may not have 4.6 yet
   if (getAPIProvider() !== 'firstParty') {
@@ -275,6 +304,14 @@ export function getDefaultHaikuModel(): ModelName {
   // MiniMax — fastest tier for "haiku"-equivalent.
   if (getAPIProvider() === 'minimax') {
     return process.env.OPENAI_MODEL || 'MiniMax-M2.5-highspeed'
+  }
+  // Xiaomi MiMo — fast tier for "haiku"-equivalent.
+  if (getAPIProvider() === 'xiaomi-mimo') {
+    return process.env.OPENAI_MODEL || 'mimo-v2-flash'
+  }
+  // xAI — faster Grok model for "haiku"-equivalent.
+  if (getAPIProvider() === 'xai') {
+    return process.env.OPENAI_MODEL || 'grok-3'
   }
 
   // Haiku 4.5 is available on all platforms (first-party, Foundry, Bedrock, Vertex)
@@ -331,7 +368,7 @@ export function getDefaultMainLoopModelSetting(): ModelName | ModelAlias {
   }
   // Gemini provider: always use the configured Gemini model
   if (getAPIProvider() === 'gemini') {
-    return process.env.GEMINI_MODEL || 'gemini-2.0-flash'
+    return process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL
   }
   if (getAPIProvider() === 'mistral') {
     return process.env.MISTRAL_MODEL || 'devstral-latest'
@@ -343,6 +380,18 @@ export function getDefaultMainLoopModelSetting(): ModelName | ModelAlias {
   // Codex provider: always use the configured Codex model (default gpt-5.5)
   if (getAPIProvider() === 'codex') {
     return process.env.OPENAI_MODEL || 'gpt-5.5'
+  }
+  // xAI provider: always use the configured Grok model (default grok-4.3)
+  if (getAPIProvider() === 'xai') {
+    return process.env.OPENAI_MODEL || 'grok-4.3'
+  }
+  // MiniMax provider: always use the configured MiniMax model
+  if (getAPIProvider() === 'minimax') {
+    return process.env.OPENAI_MODEL || 'MiniMax-M2.7'
+  }
+  // Xiaomi MiMo provider: always use the configured MiMo model
+  if (getAPIProvider() === 'xiaomi-mimo') {
+    return process.env.OPENAI_MODEL || 'mimo-v2.5-pro'
   }
 
   // Ants default to defaultModel from flag config, or Opus 1M if not configured
@@ -386,7 +435,10 @@ export function getDefaultMainLoopModel(): ModelName {
 export function firstPartyNameToCanonical(name: ModelName): ModelShortName {
   name = name.toLowerCase()
   // Special cases for Claude 4+ models to differentiate versions
-  // Order matters: check more specific versions first (4-5 before 4)
+  // Order matters: check more specific versions first (4-7 before 4-6 before 4-5 before 4)
+  if (name.includes('claude-opus-4-7')) {
+    return 'claude-opus-4-7'
+  }
   if (name.includes('claude-opus-4-6')) {
     return 'claude-opus-4-6'
   }
@@ -457,9 +509,9 @@ export function getClaudeAiUserDefaultModelDescription(
 ): string {
   if (isMaxSubscriber() || isTeamPremiumSubscriber()) {
     if (isOpus1mMergeEnabled()) {
-      return `Opus 4.6 with 1M context · Most capable for complex work${fastMode ? getOpus46PricingSuffix(true) : ''}`
+      return `Opus 4.7 with 1M context · Most capable for complex work${fastMode ? getOpus46PricingSuffix(true) : ''}`
     }
-    return `Opus 4.6 · Most capable for complex work${fastMode ? getOpus46PricingSuffix(true) : ''}`
+    return `Opus 4.7 · Most capable for complex work${fastMode ? getOpus46PricingSuffix(true) : ''}`
   }
   return 'Sonnet 4.6 · Best for everyday tasks'
 }
@@ -468,7 +520,7 @@ export function renderDefaultModelSetting(
   setting: ModelName | ModelAlias,
 ): string {
   if (setting === 'opusplan') {
-    return 'Opus 4.6 in plan mode, else Sonnet 4.6'
+    return 'Opus 4.7 in plan mode, else Sonnet 4.6'
   }
   return renderModelName(parseUserSpecifiedModel(setting))
 }
@@ -523,8 +575,19 @@ export function renderModelSetting(setting: ModelName | ModelAlias): string {
  * if the model is not recognized as a public model.
  */
 export function getPublicModelDisplayName(model: ModelName): string | null {
-  // For OpenAI/Gemini/Codex/GitHub providers, show the actual model name not a Claude alias
-  if (getAPIProvider() === 'openai' || getAPIProvider() === 'gemini' || getAPIProvider() === 'codex' || getAPIProvider() === 'github') {
+  // For OpenAI-compatible/non-Anthropic providers, show the actual model name
+  // instead of interpreting provider-specific defaults as Claude aliases.
+  if (
+    getAPIProvider() === 'openai' ||
+    getAPIProvider() === 'gemini' ||
+    getAPIProvider() === 'codex' ||
+    getAPIProvider() === 'github' ||
+    getAPIProvider() === 'xai' ||
+    getAPIProvider() === 'minimax' ||
+    getAPIProvider() === 'xiaomi-mimo' ||
+    getAPIProvider() === 'nvidia-nim' ||
+    getAPIProvider() === 'mistral'
+  ) {
     // Return display names for known GitHub Copilot models
     const copilotModelNames: Record<string, string> = {
       'gpt-5.5': 'GPT-5.5',
@@ -561,10 +624,14 @@ export function getPublicModelDisplayName(model: ModelName): string | null {
       return 'GPT-5.4'
     case 'gpt-5.3-codex-spark':
       return 'GPT-5.3 Codex Spark'
-    case getModelStrings().opus46:
-      return 'Opus 4.6'
+    case getModelStrings().opus47 + '[1m]':
+      return 'Opus 4.7 (1M context)'
+    case getModelStrings().opus47:
+      return 'Opus 4.7'
     case getModelStrings().opus46 + '[1m]':
       return 'Opus 4.6 (1M context)'
+    case getModelStrings().opus46:
+      return 'Opus 4.6'
     case getModelStrings().opus45:
       return 'Opus 4.5'
     case getModelStrings().opus41:
@@ -783,6 +850,9 @@ export function isLegacyModelRemapEnabled(): boolean {
 
 export function modelDisplayString(model: ModelSetting): string {
   if (model === null) {
+    if (getAPIProvider() !== 'firstParty') {
+      return `Default (${getDefaultMainLoopModel()})`
+    }
     if (process.env.USER_TYPE === 'ant') {
       return `Default for Ants (${renderDefaultModelSetting(getDefaultMainLoopModelSetting())})`
     } else if (isClaudeAISubscriber()) {
@@ -804,6 +874,9 @@ export function getMarketingNameForModel(modelId: string): string | undefined {
   const has1m = modelId.toLowerCase().includes('[1m]')
   const canonical = getCanonicalName(modelId)
 
+  if (canonical.includes('claude-opus-4-7')) {
+    return has1m ? 'Opus 4.7 (with 1M context)' : 'Opus 4.7'
+  }
   if (canonical.includes('claude-opus-4-6')) {
     return has1m ? 'Opus 4.6 (with 1M context)' : 'Opus 4.6'
   }

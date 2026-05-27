@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { isIP } from 'node:net'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -14,7 +15,14 @@ import {
   asTrimmedString,
   parseChatgptAccountId,
 } from './codexOAuthShared.js'
-import { DEFAULT_GEMINI_BASE_URL } from 'src/utils/providerProfile.js'
+import {
+  DEFAULT_GEMINI_BASE_URL,
+  DEFAULT_GEMINI_MODEL,
+} from 'src/utils/providerProfile.js'
+import {
+  openAIShimSupportsApiFormatForModel,
+  resolveOpenAIShimRuntimeContext,
+} from '../../integrations/runtimeMetadata.js'
 
 export const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1'
 export const DEFAULT_CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex'
@@ -22,6 +30,27 @@ export const DEFAULT_MISTRAL_BASE_URL = 'https://api.mistral.ai/v1'
 /** Default GitHub Copilot API model when user selects copilot / github:copilot */
 export const DEFAULT_GITHUB_MODELS_API_MODEL = 'gpt-4o'
 const warnedUndefinedEnvNames = new Set<string>()
+
+function normalizeGitlawbOpengatewayBaseUrl(baseUrl: string | undefined): string | undefined {
+  if (!baseUrl) return undefined
+  try {
+    const parsed = new URL(baseUrl)
+    const hostname = parsed.hostname.toLowerCase()
+    if (hostname !== 'opengateway.gitlawb.com' && hostname !== 'opengateway.fly.dev') {
+      return baseUrl
+    }
+    const path = parsed.pathname.replace(/\/+$/, '').toLowerCase()
+    if (path === '/v1/xiaomi-mimo' || path === '/v1/gmi-cloud') {
+      parsed.pathname = '/v1'
+      parsed.search = ''
+      parsed.hash = ''
+      return parsed.toString().replace(/\/+$/, '')
+    }
+  } catch {
+    return baseUrl
+  }
+  return baseUrl
+}
 
 const CODEX_ALIAS_MODELS: Record<
   string,
@@ -82,7 +111,8 @@ type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh'
 
 const OPENAI_CODEX_SHORTCUT_ALIASES = new Set(['codexplan', 'codexspark'])
 
-export type ProviderTransport = 'chat_completions' | 'codex_responses'
+export type ProviderTransport = 'chat_completions' | 'responses' | 'codex_responses'
+export type OpenAICompatibleApiFormat = 'chat_completions' | 'responses'
 
 export type ResolvedProviderRequest = {
   transport: ProviderTransport
@@ -110,6 +140,17 @@ type ModelDescriptor = {
 }
 
 const LOCALHOST_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1'])
+
+function hashCacheScopePartition(value: unknown): string {
+  return createHash('sha256')
+    .update(JSON.stringify(value))
+    .digest('hex')
+    .slice(0, 16)
+}
+
+function normalizeCacheScopeHeaderValue(value: string | undefined): string {
+  return value?.trim() ?? ''
+}
 
 function isPrivateIpv4Address(hostname: string): boolean {
   const octets = hostname.split('.').map(part => Number.parseInt(part, 10))
@@ -196,6 +237,30 @@ function parseReasoningEffort(value: string | undefined): ReasoningEffort | unde
   const normalized = value.trim().toLowerCase()
   if (normalized === 'low' || normalized === 'medium' || normalized === 'high' || normalized === 'xhigh') {
     return normalized
+  }
+  return undefined
+}
+
+export function parseOpenAICompatibleApiFormat(
+  value: string | undefined,
+): OpenAICompatibleApiFormat | undefined {
+  if (!value) return undefined
+  const normalized = value.trim().toLowerCase().replace(/[- ]+/g, '_')
+  if (
+    normalized === 'responses' ||
+    normalized === 'response' ||
+    normalized === 'responses_api'
+  ) {
+    return 'responses'
+  }
+  if (
+    normalized === 'chat_completions' ||
+    normalized === 'chat_completion' ||
+    normalized === 'completions' ||
+    normalized === 'completion' ||
+    normalized === 'chat'
+  ) {
+    return 'chat_completions'
   }
   return undefined
 }
@@ -311,6 +376,70 @@ export function isLocalProviderUrl(baseUrl: string | undefined): boolean {
   } catch {
     return false
   }
+}
+
+// Fast-path opt-outs that are safe (and beneficial) when the provider is a
+// local OpenAI-compatible endpoint. These features are designed for cloud
+// behaviours that do not exist on local backends:
+//   - byte-stable serialization (`stableStringify`) targets implicit prefix
+//     caching on OpenAI/Kimi/DeepSeek/Codex; local backends do not hash
+//     request prefixes, so the deep key-sort is pure CPU overhead.
+//   - strict tool-schema normalization rewrites Anthropic schemas to the
+//     `additionalProperties: false` shape required by Groq/Azure; local
+//     llama.cpp/vLLM accept either form, so the recursive walk is wasted.
+//   - tool-result compression tiers tool_result blocks for stateless cloud
+//     providers; on a single-user local box where the conversation lives
+//     in RAM, the tier-walk is wasted unless the user opts back in.
+//
+// Issue #1016 traced cumulative client-side overhead as the dominant cause
+// of v0.5+ regressions against ~45 tok/s local models: against a 200ms cloud
+// API the layers are invisible, but against multi-second local round-trips
+// they multiply per-call.
+//
+// Set `OPENCLAUDE_LOCAL_FAST_PATH=1` to force it on, `=0` to force off, or
+// leave it unset to let `isLocalProviderUrl` decide. The opt-out is intended
+// to be conservative: if the env var is set explicitly, callers can audit
+// regressions; if not, behaviour only changes for hosts already classified
+// as local by the existing detector (loopback, RFC1918, .local, ULA/LL).
+const LOCAL_FAST_PATH_ENV = 'OPENCLAUDE_LOCAL_FAST_PATH'
+
+export type LocalFastPathConfig = {
+  enabled: boolean
+  skipStableStringify: boolean
+  skipStrictTools: boolean
+  skipToolHistoryCompression: boolean
+}
+
+const LOCAL_FAST_PATH_OFF: LocalFastPathConfig = {
+  enabled: false,
+  skipStableStringify: false,
+  skipStrictTools: false,
+  skipToolHistoryCompression: false,
+}
+
+const LOCAL_FAST_PATH_ON: LocalFastPathConfig = {
+  enabled: true,
+  skipStableStringify: true,
+  skipStrictTools: true,
+  skipToolHistoryCompression: true,
+}
+
+function parseLocalFastPathOverride(raw: string | undefined): boolean | undefined {
+  if (raw === undefined) return undefined
+  const v = raw.trim().toLowerCase()
+  if (v === '' || v === 'auto') return undefined
+  if (v === '0' || v === 'false' || v === 'off' || v === 'no') return false
+  if (v === '1' || v === 'true' || v === 'on' || v === 'yes') return true
+  return undefined
+}
+
+export function getLocalFastPathConfig(
+  baseUrl: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): LocalFastPathConfig {
+  const override = parseLocalFastPathOverride(env[LOCAL_FAST_PATH_ENV])
+  const enabled = override ?? isLocalProviderUrl(baseUrl)
+  return enabled ? LOCAL_FAST_PATH_ON : LOCAL_FAST_PATH_OFF
 }
 
 function trimTrailingSlash(value: string): string {
@@ -482,6 +611,7 @@ export function resolveProviderRequest(options?: {
   baseUrl?: string
   fallbackModel?: string
   reasoningEffortOverride?: ReasoningEffort
+  apiFormat?: OpenAICompatibleApiFormat | string
 }): ResolvedProviderRequest {
   const isGithubMode = isEnvTruthy(process.env.CLAUDE_CODE_USE_GITHUB)
   const isMistralMode = isEnvTruthy(process.env.CLAUDE_CODE_USE_MISTRAL)
@@ -495,7 +625,8 @@ export function resolveProviderRequest(options?: {
       ? process.env.GEMINI_MODEL?.trim()
       : process.env.OPENAI_MODEL?.trim()) ||
     options?.fallbackModel?.trim() ||
-    (isGithubMode ? 'github:copilot' : 'gpt-4o')
+    (isGeminiMode ? DEFAULT_GEMINI_MODEL : undefined) ||
+    (isGithubMode ? 'github:copilot' : 'codexplan')
   const descriptor = parseModelDescriptor(requestedModel)
   const explicitBaseUrl = asEnvUrl(options?.baseUrl)
 
@@ -512,8 +643,8 @@ export function resolveProviderRequest(options?: {
   const primaryEnvBaseUrl = isMistralMode
     ? normalizedMistralEnvBaseUrl
     : isGeminiMode
-    ? normalizedGeminiEnvBaseUrl
-    : asNamedEnvUrl(process.env.OPENAI_BASE_URL, 'OPENAI_BASE_URL')
+      ? normalizedGeminiEnvBaseUrl
+      : asNamedEnvUrl(process.env.OPENAI_BASE_URL, 'OPENAI_BASE_URL')
 
   // In Mistral mode, a literal "undefined" MISTRAL_BASE_URL is treated as
   // misconfiguration and falls back to OPENAI_API_BASE, then
@@ -523,12 +654,12 @@ export function resolveProviderRequest(options?: {
       ? asNamedEnvUrl(process.env.OPENAI_API_BASE, 'OPENAI_API_BASE') ?? DEFAULT_MISTRAL_BASE_URL
       : undefined)
     : isGeminiMode
-    ? (primaryEnvBaseUrl === undefined
-      ? asNamedEnvUrl(process.env.OPENAI_API_BASE, 'OPENAI_API_BASE') ?? DEFAULT_GEMINI_BASE_URL
-      : undefined)
-    : (primaryEnvBaseUrl === undefined
-      ? asNamedEnvUrl(process.env.OPENAI_API_BASE, 'OPENAI_API_BASE')
-      : undefined)
+      ? (primaryEnvBaseUrl === undefined
+        ? asNamedEnvUrl(process.env.OPENAI_API_BASE, 'OPENAI_API_BASE') ?? DEFAULT_GEMINI_BASE_URL
+        : undefined)
+      : (primaryEnvBaseUrl === undefined
+        ? asNamedEnvUrl(process.env.OPENAI_API_BASE, 'OPENAI_API_BASE')
+        : undefined)
 
   const envBaseUrlRaw =
     explicitBaseUrl ??
@@ -555,10 +686,11 @@ export function resolveProviderRequest(options?: {
   const isCodexAliasModel =
     isOpenAICodexShortcutAlias(requestedModel) || requestedMatchesEnvCodexShortcut
   const hasUserSetBaseUrl = rawBaseUrl && rawBaseUrl !== DEFAULT_OPENAI_BASE_URL
-  const finalBaseUrl =
+  const finalBaseUrlRaw =
     !isGithubMode && isCodexAliasModel && !hasUserSetBaseUrl
       ? DEFAULT_CODEX_BASE_URL
       : rawBaseUrl
+  const finalBaseUrl = normalizeGitlawbOpengatewayBaseUrl(finalBaseUrlRaw)
 
   const githubEndpointType = isGithubMode
     ? getGithubEndpointType(rawBaseUrl)
@@ -571,11 +703,34 @@ export function resolveProviderRequest(options?: {
     ? normalizeGithubModelsApiModel(requestedModel)
     : requestedModel
 
+  const requestedApiFormat =
+    isGithubMode
+      ? undefined
+      : parseOpenAICompatibleApiFormat(options?.apiFormat) ??
+      parseOpenAICompatibleApiFormat(process.env.OPENAI_API_FORMAT)
+  const supportsRequestedApiFormat =
+    requestedApiFormat !== 'responses' ||
+    (() => {
+      const runtimeShimContext = resolveOpenAIShimRuntimeContext({
+        processEnv: process.env,
+        baseUrl: finalBaseUrl,
+        model: descriptor.baseModel,
+        treatAsLocal: finalBaseUrl ? isLocalProviderUrl(finalBaseUrl) : false,
+      })
+
+      return openAIShimSupportsApiFormatForModel(
+        runtimeShimContext.openaiShimConfig,
+        'responses',
+        descriptor.baseModel,
+      )
+    })()
   const transport: ProviderTransport =
     shouldUseCodexTransport(requestedModel, finalBaseUrl) ||
       (isGithubCopilot && shouldUseGithubResponsesApi(githubResolvedModel))
       ? 'codex_responses'
-      : 'chat_completions'
+      : requestedApiFormat === 'responses' && supportsRequestedApiFormat
+        ? 'responses'
+        : 'chat_completions'
 
   // For GitHub Copilot API, normalize to real model ID (e.g., "github:copilot" -> "gpt-4o")
   // For GitHub Models/custom endpoints:
@@ -610,11 +765,11 @@ export function resolveProviderRequest(options?: {
 export function getAdditionalModelOptionsCacheScope(): string | null {
   if (!isEnvTruthy(process.env.CLAUDE_CODE_USE_OPENAI)) {
     if (!isEnvTruthy(process.env.CLAUDE_CODE_USE_GEMINI) &&
-        !isEnvTruthy(process.env.CLAUDE_CODE_USE_MISTRAL) &&
-        !isEnvTruthy(process.env.CLAUDE_CODE_USE_GITHUB) &&
-        !isEnvTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) &&
-        !isEnvTruthy(process.env.CLAUDE_CODE_USE_VERTEX) &&
-        !isEnvTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)) {
+      !isEnvTruthy(process.env.CLAUDE_CODE_USE_MISTRAL) &&
+      !isEnvTruthy(process.env.CLAUDE_CODE_USE_GITHUB) &&
+      !isEnvTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) &&
+      !isEnvTruthy(process.env.CLAUDE_CODE_USE_VERTEX) &&
+      !isEnvTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)) {
       return 'firstParty'
     }
     return null
@@ -629,7 +784,15 @@ export function getAdditionalModelOptionsCacheScope(): string | null {
     return null
   }
 
-  return `openai:${request.baseUrl.toLowerCase()}`
+  const partition = hashCacheScopePartition({
+    apiKey: normalizeCacheScopeHeaderValue(process.env.OPENAI_API_KEY),
+    authHeader: normalizeCacheScopeHeaderValue(process.env.OPENAI_AUTH_HEADER).toLowerCase(),
+    authScheme: normalizeCacheScopeHeaderValue(process.env.OPENAI_AUTH_SCHEME).toLowerCase(),
+    authHeaderValue: normalizeCacheScopeHeaderValue(process.env.OPENAI_AUTH_HEADER_VALUE),
+    customHeaders: normalizeCacheScopeHeaderValue(process.env.ANTHROPIC_CUSTOM_HEADERS),
+  })
+
+  return `openai:${request.baseUrl.toLowerCase()}:${partition}`
 }
 
 export function resolveCodexAuthPath(
@@ -801,7 +964,7 @@ export function resolveRuntimeCodexCredentials(options?: {
   )
   const hasStoredCredentialsOption = Boolean(
     options &&
-      Object.prototype.hasOwnProperty.call(options, 'storedCredentials'),
+    Object.prototype.hasOwnProperty.call(options, 'storedCredentials'),
   )
 
   if (

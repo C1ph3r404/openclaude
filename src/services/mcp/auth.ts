@@ -33,6 +33,7 @@ import { parse } from 'url'
 import xss from 'xss'
 import { MCP_CLIENT_METADATA_URL } from '../../constants/oauth.js'
 import { openBrowser } from '../../utils/browser.js'
+import { createCombinedAbortSignal } from '../../utils/combinedAbortSignal.js'
 import { getClaudeConfigHomeDir } from '../../utils/envUtils.js'
 import { errorMessage, getErrnoCode } from '../../utils/errors.js'
 import * as lockfile from '../../utils/lockfile.js'
@@ -129,12 +130,12 @@ type OAuthCallbackParamValue = string | string[] | null | undefined
 type OAuthCallbackValidationResult =
   | { type: 'code'; code: string }
   | {
-      type: 'error'
-      error: string
-      errorDescription: string
-      errorUri: string
-      message: string
-    }
+    type: 'error'
+    error: string
+    errorDescription: string
+    errorUri: string
+    message: string
+  }
   | { type: 'missing_result' }
   | { type: 'state_mismatch' }
 
@@ -244,11 +245,11 @@ export async function normalizeOAuthErrorBody(
   }
   const normalized = NONSTANDARD_INVALID_GRANT_ALIASES.has(result.data.error)
     ? {
-        error: 'invalid_grant',
-        error_description:
-          result.data.error_description ??
-          `Server returned non-standard error code: ${result.data.error}`,
-      }
+      error: 'invalid_grant',
+      error_description:
+        result.data.error_description ??
+        `Server returned non-standard error code: ${result.data.error}`,
+    }
     : result.data
   return new Response(jsonStringify(normalized), {
     status: 400,
@@ -265,41 +266,16 @@ export async function normalizeOAuthErrorBody(
  */
 function createAuthFetch(): FetchLike {
   return async (url: string | URL, init?: RequestInit) => {
-    const timeoutSignal = AbortSignal.timeout(AUTH_REQUEST_TIMEOUT_MS)
     const isPost = init?.method?.toUpperCase() === 'POST'
-
-    // No existing signal - just use timeout
-    if (!init?.signal) {
-      // eslint-disable-next-line eslint-plugin-n/no-unsupported-features/node-builtins
-      const response = await fetch(url, { ...init, signal: timeoutSignal })
-      return isPost ? normalizeOAuthErrorBody(response) : response
-    }
-
-    // Combine signals: abort when either fires
-    const controller = new AbortController()
-    const abort = () => controller.abort()
-
-    init.signal.addEventListener('abort', abort)
-    timeoutSignal.addEventListener('abort', abort)
-
-    // Cleanup to prevent event listener leaks after fetch completes
-    const cleanup = () => {
-      init.signal?.removeEventListener('abort', abort)
-      timeoutSignal.removeEventListener('abort', abort)
-    }
-
-    if (init.signal.aborted) {
-      controller.abort()
-    }
-
+    const { signal, cleanup } = createCombinedAbortSignal(init?.signal, {
+      timeoutMs: AUTH_REQUEST_TIMEOUT_MS,
+    })
     try {
       // eslint-disable-next-line eslint-plugin-n/no-unsupported-features/node-builtins
-      const response = await fetch(url, { ...init, signal: controller.signal })
+      const response = await fetch(url, { ...init, signal })
+      return isPost ? await normalizeOAuthErrorBody(response) : response
+    } finally {
       cleanup()
-      return isPost ? normalizeOAuthErrorBody(response) : response
-    } catch (error) {
-      cleanup()
-      throw error
     }
   }
 }
@@ -579,8 +555,8 @@ export async function revokeServerTokens(
               : undefined)
           const authMethod: 'client_secret_basic' | 'client_secret_post' =
             authMethods &&
-            !authMethods.includes('client_secret_basic') &&
-            authMethods.includes('client_secret_post')
+              !authMethods.includes('client_secret_basic') &&
+              authMethods.includes('client_secret_post')
               ? 'client_secret_post'
               : 'client_secret_basic'
           logMCPDebug(
@@ -667,15 +643,15 @@ export async function revokeServerTokens(
             : {}),
           ...(tokenData.discoveryState
             ? {
-                // Strip legacy bulky metadata fields here too so users with
-                // existing overflowed blobs recover on next re-auth (#30337).
-                discoveryState: {
-                  authorizationServerUrl:
-                    tokenData.discoveryState.authorizationServerUrl,
-                  resourceMetadataUrl:
-                    tokenData.discoveryState.resourceMetadataUrl,
-                },
-              }
+              // Strip legacy bulky metadata fields here too so users with
+              // existing overflowed blobs recover on next re-auth (#30337).
+              discoveryState: {
+                authorizationServerUrl:
+                  tokenData.discoveryState.authorizationServerUrl,
+                resourceMetadataUrl:
+                  tokenData.discoveryState.resourceMetadataUrl,
+              },
+            }
             : {}),
         },
       },
@@ -951,10 +927,10 @@ export async function performMCPOAuthFlow(
         serverConfig.type as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
       ...(getLoggingSafeMcpBaseUrl(serverConfig)
         ? {
-            mcpServerBaseUrl: getLoggingSafeMcpBaseUrl(
-              serverConfig,
-            ) as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-          }
+          mcpServerBaseUrl: getLoggingSafeMcpBaseUrl(
+            serverConfig,
+          ) as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+        }
         : {}),
     })
     // performMCPXaaAuth logs its own success/failure events (with
@@ -1013,10 +989,10 @@ export async function performMCPOAuthFlow(
       serverConfig.type as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
     ...(getLoggingSafeMcpBaseUrl(serverConfig)
       ? {
-          mcpServerBaseUrl: getLoggingSafeMcpBaseUrl(
-            serverConfig,
-          ) as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-        }
+        mcpServerBaseUrl: getLoggingSafeMcpBaseUrl(
+          serverConfig,
+        ) as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+      }
       : {}),
   })
 
@@ -1079,7 +1055,7 @@ export async function performMCPOAuthFlow(
       if (server) {
         server.removeAllListeners()
         // Defensive: removeAllListeners() strips the error handler, so swallow any late error during close
-        server.on('error', () => {})
+        server.on('error', () => { })
         server.close()
         server = null
       }
@@ -1209,7 +1185,7 @@ export async function performMCPOAuthFlow(
 
           res.writeHead(200, { 'Content-Type': 'text/html' })
           res.end(
-            `<h1>Authentication Successful</h1><p>You can close this window. Return to Claude Code.</p>`,
+            `<h1>Authentication Successful</h1><p>You can close this window. Return to OpenClaude.</p>`,
           )
           cleanup()
           resolveOnce(result.code)
@@ -1226,7 +1202,7 @@ export async function performMCPOAuthFlow(
           rejectOnce(
             new Error(
               `OAuth callback port ${port} is already in use — another process may be holding it. ` +
-                `Run \`${findCmd}\` to find it.`,
+              `Run \`${findCmd}\` to find it.`,
             ),
           )
         } else {
@@ -1313,10 +1289,10 @@ export async function performMCPOAuthFlow(
           serverConfig.type as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
         ...(getLoggingSafeMcpBaseUrl(serverConfig)
           ? {
-              mcpServerBaseUrl: getLoggingSafeMcpBaseUrl(
-                serverConfig,
-              ) as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-            }
+            mcpServerBaseUrl: getLoggingSafeMcpBaseUrl(
+              serverConfig,
+            ) as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+          }
           : {}),
       })
     } else {
@@ -1397,10 +1373,10 @@ export async function performMCPOAuthFlow(
         serverConfig.type as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
       ...(getLoggingSafeMcpBaseUrl(serverConfig)
         ? {
-            mcpServerBaseUrl: getLoggingSafeMcpBaseUrl(
-              serverConfig,
-            ) as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-          }
+          mcpServerBaseUrl: getLoggingSafeMcpBaseUrl(
+            serverConfig,
+          ) as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+        }
         : {}),
     })
     throw error
@@ -2259,15 +2235,15 @@ export class ClaudeAuthProvider implements OAuthClientProvider {
             .type as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
           ...(mcpServerBaseUrl
             ? {
-                mcpServerBaseUrl:
-                  mcpServerBaseUrl as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-              }
+              mcpServerBaseUrl:
+                mcpServerBaseUrl as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+            }
             : {}),
           ...(reason
             ? {
-                reason:
-                  reason as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-              }
+              reason:
+                reason as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+            }
             : {}),
         },
       )

@@ -1,8 +1,8 @@
 import { APIError } from '@anthropic-ai/sdk'
-import * as fs from 'fs'
 import { buildAnthropicUsageFromRawUsage } from './cacheMetrics.js'
 import { compressToolHistory } from './compressToolHistory.js'
 import { fetchWithProxyRetry } from './fetchWithProxyRetry.js'
+import { stableStringifyJson } from '../../utils/stableStringify.js'
 import type {
   ResolvedCodexCredentials,
   ResolvedProviderRequest,
@@ -92,17 +92,6 @@ function makeMessageId(): string {
   return `msg_${crypto.randomUUID().replace(/-/g, '')}`
 }
 
-function debugLog(msg: string, data?: unknown): void {
-  const timestamp = new Date().toISOString()
-  const logEntry = `[${timestamp}] ${msg}${data ? ' ' + JSON.stringify(data) : ''}\n`
-  try {
-    fs.appendFileSync('debug.txt', logEntry)
-  } catch (err) {
-    // Fallback to console if file write fails
-    console.error('[debugLog] Failed to write to debug.txt:', err)
-  }
-}
-
 function normalizeToolUseId(toolUseId: string | undefined): {
   id: string
   callId: string
@@ -132,7 +121,7 @@ function normalizeToolUseId(toolUseId: string | undefined): {
   }
 }
 
-function convertSystemPrompt(system: unknown): string {
+export function convertSystemPrompt(system: unknown): string {
   if (!system) return ''
   if (typeof system === 'string') return system
   if (Array.isArray(system)) {
@@ -140,6 +129,10 @@ function convertSystemPrompt(system: unknown): string {
       .map((block: { type?: string; text?: string }) =>
         block.type === 'text' ? (block.text ?? '') : '',
       )
+      // Drop the Anthropic billing/attribution block — Codex's Responses API
+      // doesn't parse it and the per-build fingerprint just churns the
+      // upstream prompt cache.
+      .filter(text => !text.startsWith('x-anthropic-billing-header'))
       .join('\n\n')
   }
   return String(system)
@@ -317,6 +310,63 @@ export function convertAnthropicMessagesToResponsesInput(
 }
 
 /**
+ * Codex Responses strict mode requires every schema node to declare a `type`.
+ * MCP tools sometimes register properties with no `type` (e.g. a generic
+ * `value` parameter intended to accept any JSON), which triggers a 400 from
+ * the Responses API: `schema must have a 'type' key`. Infer one from sibling
+ * keys, fall back to `string` for fully empty nodes, and leave combinator-only
+ * schemas alone (their branches carry the real type info).
+ */
+function ensureSchemaType(record: Record<string, unknown>): void {
+  const raw = record.type
+  if (typeof raw === 'string') return
+  if (Array.isArray(raw) && raw.length > 0) return
+
+  if (record.properties && typeof record.properties === 'object') {
+    record.type = 'object'
+    return
+  }
+  if ('items' in record) {
+    record.type = 'array'
+    return
+  }
+  if (Array.isArray((record as Record<string, unknown>).anyOf) ||
+    Array.isArray((record as Record<string, unknown>).oneOf) ||
+    Array.isArray((record as Record<string, unknown>).allOf)) {
+    // Combinator-only schemas keep their semantics; forcing a `type` here
+    // would silently narrow the alternatives.
+    return
+  }
+  if (Array.isArray(record.enum) && record.enum.length > 0) {
+    const sample = typeof record.enum[0]
+    if (sample === 'string' || sample === 'boolean') {
+      record.type = sample
+      return
+    }
+    if (sample === 'number') {
+      record.type = record.enum.every(v => Number.isInteger(v)) ? 'integer' : 'number'
+      return
+    }
+  }
+  if ('const' in record) {
+    const sample = typeof record.const
+    if (sample === 'string' || sample === 'boolean') {
+      record.type = sample
+      return
+    }
+    if (sample === 'number') {
+      record.type = Number.isInteger(record.const) ? 'integer' : 'number'
+      return
+    }
+  }
+
+  // Permissive default: strict mode demands a concrete type, and `string`
+  // round-trips through JSON.stringify for callers that need to forward raw
+  // values to the underlying tool.
+  record.type = 'string'
+}
+
+/**
  * Recursively enforces Codex strict-mode constraints on a JSON schema:
  * - Every `object` type gets `additionalProperties: false`
  * - All property keys are listed in `required`
@@ -324,6 +374,8 @@ export function convertAnthropicMessagesToResponsesInput(
  */
 function enforceStrictSchema(schema: unknown): Record<string, unknown> {
   const record = sanitizeSchemaForOpenAICompat(schema)
+
+  ensureSchemaType(record)
 
   // Codex Responses rejects JSON Schema's standard `uri` string format.
   // Keep URL validation in the tool layer and send a plain string here.
@@ -342,7 +394,6 @@ function enforceStrictSchema(schema: unknown): Record<string, unknown> {
       !Array.isArray(record.properties)
     ) {
       const props = record.properties as Record<string, unknown>
-      const allKeys = Object.keys(props)
 
       const enforcedProps: Record<string, unknown> = {}
       for (const [key, value] of Object.entries(props)) {
@@ -365,7 +416,8 @@ function enforceStrictSchema(schema: unknown): Record<string, unknown> {
       record.properties = enforcedProps
       record.required = Object.keys(enforcedProps)
     } else {
-      // No properties — empty required array
+      // No properties — empty object schema with empty required array
+      record.properties = {}
       record.required = []
     }
   }
@@ -571,7 +623,9 @@ export async function performCodexRequest(options: {
     {
       method: 'POST',
       headers,
-      body: JSON.stringify(body),
+      // WHY: byte-identity required for implicit prefix caching on
+      // OpenAI Responses API. See src/utils/stableStringify.ts.
+      body: stableStringifyJson(body),
       signal: options.signal,
     },
   )
@@ -795,13 +849,6 @@ export async function* codexStreamToAnthropic(
     if (event.event === 'response.output_item.added') {
       const item = payload.item
       if (item?.type === 'function_call') {
-        debugLog('[codexShim] response.output_item.added for function_call:', {
-          id: item.id,
-          call_id: item.call_id,
-          name: item.name,
-          arguments: item.arguments,
-          argumentsLength: typeof item.arguments === 'string' ? item.arguments.length : 'N/A',
-        })
         yield* closeActiveTextBlock()
         const blockIndex = nextContentBlockIndex++
         const toolUseId = item.call_id ?? item.id ?? `call_${blockIndex}`
@@ -823,7 +870,6 @@ export async function* codexStreamToAnthropic(
         }
 
         if (item.arguments) {
-          debugLog('[codexShim] Yielding initial arguments for tool:', { name: item.name, arguments: item.arguments })
           yield {
             type: 'content_block_delta',
             index: blockIndex,
@@ -832,8 +878,6 @@ export async function* codexStreamToAnthropic(
               partial_json: item.arguments,
             },
           }
-        } else {
-          debugLog('[codexShim] No initial arguments for tool - will come via delta events', { name: item.name })
         }
       }
       continue
@@ -865,14 +909,8 @@ export async function* codexStreamToAnthropic(
     }
 
     if (event.event === 'response.function_call_arguments.delta') {
-      debugLog('[codexShim] response.function_call_arguments.delta received:', {
-        item_id: payload.item_id,
-        delta: payload.delta,
-        deltaLength: typeof payload.delta === 'string' ? payload.delta.length : 'N/A',
-      })
       const toolBlock = toolBlocksByItemId.get(String(payload.item_id ?? ''))
       if (toolBlock) {
-        debugLog('[codexShim] Yielding arguments delta for tool block index:', { index: toolBlock.index })
         yield {
           type: 'content_block_delta',
           index: toolBlock.index,
@@ -881,8 +919,6 @@ export async function* codexStreamToAnthropic(
             partial_json: payload.delta ?? '',
           },
         }
-      } else {
-        debugLog('[codexShim] WARNING: No tool block found for item_id:', payload.item_id)
       }
       continue
     }
@@ -952,7 +988,6 @@ export function convertCodexResponseToAnthropicMessage(
   const content: Array<Record<string, unknown>> = []
   const output = Array.isArray(data.output) ? data.output : []
 
-  debugLog('[codexShim] convertCodexResponseToAnthropicMessage: processing output items', { count: output.length })
   for (const item of output) {
     if (item?.type === 'message' && Array.isArray(item.content)) {
       for (const part of item.content) {
@@ -967,19 +1002,10 @@ export function convertCodexResponseToAnthropicMessage(
     }
 
     if (item?.type === 'function_call') {
-      debugLog('[codexShim] Processing function_call item:', {
-        id: item.id,
-        call_id: item.call_id,
-        name: item.name,
-        arguments: item.arguments,
-        argumentsLength: typeof item.arguments === 'string' ? item.arguments.length : 'N/A',
-      })
       let input: unknown
       try {
         input = JSON.parse(item.arguments ?? '{}')
-        debugLog('[codexShim] Parsed arguments successfully:', input)
-      } catch (e) {
-        debugLog('[codexShim] Failed to parse arguments, using raw:', { arguments: item.arguments, error: String(e) })
+      } catch {
         input = { raw: item.arguments ?? '' }
       }
 

@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { logForDebugging } from '../debug.js'
+import { isEssentialTrafficOnly } from '../privacyLevel.js'
 import type { ModelOption } from './modelOptions.js'
 import { getAPIProvider } from './providers.js'
 
@@ -78,14 +79,14 @@ function getModelListUrls(baseUrl: string): string[] {
   const addApiVersion =
     apiVersion && isAzureOpenAIBaseUrl(baseUrl)
       ? (url: string): string => {
-          try {
-            const parsed = new URL(url)
-            parsed.searchParams.set('api-version', apiVersion)
-            return parsed.toString()
-          } catch {
-            return url
-          }
+        try {
+          const parsed = new URL(url)
+          parsed.searchParams.set('api-version', apiVersion)
+          return parsed.toString()
+        } catch {
+          return url
         }
+      }
       : (url: string): string => url
 
   if (primary === secondary) {
@@ -174,6 +175,11 @@ async function fetchOllamaModels(
 export async function discoverOpenAICompatibleModelOptions(): Promise<
   ModelOption[]
 > {
+  if (isEssentialTrafficOnly()) {
+    logForDebugging('[ModelDiscovery] Skipped: Nonessential traffic disabled')
+    return []
+  }
+
   if (getAPIProvider() !== 'openai') {
     return []
   }

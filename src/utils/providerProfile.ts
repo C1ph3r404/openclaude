@@ -1,9 +1,10 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import {
   DEFAULT_CODEX_BASE_URL,
   DEFAULT_OPENAI_BASE_URL,
   isCodexBaseUrl,
+  parseOpenAICompatibleApiFormat,
   resolveCodexApiCredentials,
   resolveProviderRequest,
 } from '../services/api/providerConfig.js'
@@ -17,13 +18,18 @@ import { readGeminiAccessToken } from './geminiCredentials.js'
 import { getOllamaChatBaseUrl } from './providerDiscovery.js'
 import { getPrimaryModel } from './providerModels.js'
 import { getProviderValidationError } from './providerValidation.js'
+import { getErrnoCode } from './errors.js'
+import {
+  getRouteDefaultBaseUrl,
+  getRouteDefaultModel,
+  normalizeXiaomiMimoBaseUrl,
+} from '../integrations/routeMetadata.js'
 import {
   maskSecretForDisplay,
   redactSecretValueForDisplay,
   sanitizeApiKey,
   sanitizeProviderConfigValue,
 } from './providerSecrets.js'
-import { getPrimaryModel } from './providerModels.js'
 
 export {
   maskSecretForDisplay,
@@ -31,14 +37,12 @@ export {
   sanitizeApiKey,
   sanitizeProviderConfigValue,
 } from './providerSecrets.js'
-import { isEnvTruthy } from './envUtils.ts'
-
-import { PROVIDERS } from './configConstants.js'
+import { getClaudeConfigHomeDir, isEnvTruthy } from './envUtils.js'
 
 export const PROFILE_FILE_NAME = '.openclaude-profile.json'
 export const DEFAULT_GEMINI_BASE_URL =
   'https://generativelanguage.googleapis.com/v1beta/openai'
-export const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash'
+export const DEFAULT_GEMINI_MODEL = 'gemini-3-flash-preview'
 export const DEFAULT_MISTRAL_BASE_URL = 'https://api.mistral.ai/v1'
 export const DEFAULT_MISTRAL_MODEL = 'devstral-latest'
 
@@ -50,8 +54,19 @@ const PROFILE_ENV_KEYS = [
   'CLAUDE_CODE_USE_BEDROCK',
   'CLAUDE_CODE_USE_VERTEX',
   'CLAUDE_CODE_USE_FOUNDRY',
+  'ANTHROPIC_BASE_URL',
+  'ANTHROPIC_MODEL',
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_CUSTOM_HEADERS',
+  'ANTHROPIC_BEDROCK_BASE_URL',
+  'ANTHROPIC_VERTEX_BASE_URL',
   'OPENAI_BASE_URL',
+  'OPENAI_API_BASE',
   'OPENAI_MODEL',
+  'OPENAI_API_FORMAT',
+  'OPENAI_AUTH_HEADER',
+  'OPENAI_AUTH_SCHEME',
+  'OPENAI_AUTH_HEADER_VALUE',
   'OPENAI_API_KEY',
   'CODEX_API_KEY',
   'CODEX_CREDENTIAL_SOURCE',
@@ -75,10 +90,23 @@ const PROFILE_ENV_KEYS = [
   'BANKR_BASE_URL',
   'BNKR_API_KEY',
   'BANKR_MODEL',
+  'XAI_API_KEY',
+  'VENICE_API_KEY',
+  'MIMO_API_KEY',
 ] as const
+
+export type CompatibilityProfileMode =
+  | 'anthropic'
+  | 'openai'
+  | 'gemini'
+  | 'mistral'
+  | 'github'
+  | 'bedrock'
+  | 'vertex'
 
 const SECRET_ENV_KEYS = [
   'OPENAI_API_KEY',
+  'OPENAI_AUTH_HEADER_VALUE',
   'CODEX_API_KEY',
   'GEMINI_API_KEY',
   'GOOGLE_API_KEY',
@@ -86,13 +114,40 @@ const SECRET_ENV_KEYS = [
   'MINIMAX_API_KEY',
   'MISTRAL_API_KEY',
   'BNKR_API_KEY',
+  'XAI_API_KEY',
+  'VENICE_API_KEY',
+  'MIMO_API_KEY',
 ] as const
 
-export type ProviderProfile = 'openai' | 'ollama' | 'codex' | 'gemini' | 'atomic-chat' | 'nvidia-nim' | 'minimax' | 'mistral'
+export type ProviderProfile =
+  | 'anthropic'
+  | 'openai'
+  | 'ollama'
+  | 'codex'
+  | 'gemini'
+  | 'atomic-chat'
+  | 'nvidia-nim'
+  | 'minimax'
+  | 'mistral'
+  | 'github'
+  | 'bedrock'
+  | 'vertex'
+  | 'xai'
 
 export type ProfileEnv = {
+  ANTHROPIC_BASE_URL?: string
+  ANTHROPIC_MODEL?: string
+  ANTHROPIC_API_KEY?: string
+  ANTHROPIC_CUSTOM_HEADERS?: string
+  ANTHROPIC_BEDROCK_BASE_URL?: string
+  ANTHROPIC_VERTEX_BASE_URL?: string
   OPENAI_BASE_URL?: string
+  OPENAI_API_BASE?: string
   OPENAI_MODEL?: string
+  OPENAI_API_FORMAT?: 'chat_completions' | 'responses'
+  OPENAI_AUTH_HEADER?: string
+  OPENAI_AUTH_SCHEME?: 'bearer' | 'raw'
+  OPENAI_AUTH_HEADER_VALUE?: string
   OPENAI_API_KEY?: string
   CODEX_API_KEY?: string
   CODEX_CREDENTIAL_SOURCE?: 'oauth' | 'existing'
@@ -100,6 +155,7 @@ export type ProfileEnv = {
   CODEX_ACCOUNT_ID?: string
   GEMINI_API_KEY?: string
   GEMINI_AUTH_MODE?: 'api-key' | 'access-token' | 'adc'
+  GEMINI_ACCESS_TOKEN?: string
   GEMINI_MODEL?: string
   GEMINI_BASE_URL?: string
   GOOGLE_API_KEY?: string
@@ -114,6 +170,9 @@ export type ProfileEnv = {
   BANKR_BASE_URL?: string
   BNKR_API_KEY?: string
   BANKR_MODEL?: string
+  XAI_API_KEY?: string
+  VENICE_API_KEY?: string
+  MIMO_API_KEY?: string
 }
 
 export type ProfileFile = {
@@ -125,20 +184,33 @@ export type ProfileFile = {
 type SecretValueSource = Partial<
   Record<
     | 'OPENAI_API_KEY'
+    | 'OPENAI_AUTH_HEADER_VALUE'
     | 'CODEX_API_KEY'
     | 'GEMINI_API_KEY'
     | 'GOOGLE_API_KEY'
     | 'NVIDIA_API_KEY'
     | 'MINIMAX_API_KEY'
     | 'MISTRAL_API_KEY'
-    | 'BNKR_API_KEY',
+    | 'BNKR_API_KEY'
+    | 'XAI_API_KEY'
+    | 'VENICE_API_KEY'
+    | 'MIMO_API_KEY',
     string | undefined
   >
 >
 
-type ProfileFileLocation = {
+export type ProfileFileLocation = {
+  configDir?: string
   cwd?: string
   filePath?: string
+}
+
+export function getDefaultProfileFilePath(configDir?: string): string {
+  return join(configDir ?? getClaudeConfigHomeDir(), PROFILE_FILE_NAME)
+}
+
+function resolveLegacyProfileFilePath(cwd = process.cwd()): string {
+  return resolve(cwd, PROFILE_FILE_NAME)
 }
 
 function resolveProfileFilePath(options?: ProfileFileLocation): string {
@@ -146,7 +218,69 @@ function resolveProfileFilePath(options?: ProfileFileLocation): string {
     return options.filePath
   }
 
-  return resolve(options?.cwd ?? process.cwd(), PROFILE_FILE_NAME)
+  if (options?.cwd && !options?.configDir) {
+    return resolveLegacyProfileFilePath(options.cwd)
+  }
+
+  return getDefaultProfileFilePath(options?.configDir)
+}
+
+function resolveProfileFileReadPaths(options?: ProfileFileLocation): string[] {
+  const primary = resolveProfileFilePath(options)
+  if (options?.filePath || (options?.cwd && !options?.configDir)) {
+    return [primary]
+  }
+
+  if (existsSync(primary)) {
+    return [primary]
+  }
+
+  const legacy = resolveLegacyProfileFilePath(options?.cwd)
+  return legacy === primary ? [primary] : [primary, legacy]
+}
+
+function resolveProfileFileCleanupPaths(options?: ProfileFileLocation): string[] {
+  const primary = resolveProfileFilePath(options)
+  if (options?.filePath || (options?.cwd && !options?.configDir)) {
+    return [primary]
+  }
+
+  const legacy = resolveLegacyProfileFilePath(options?.cwd)
+  return legacy === primary ? [primary] : [primary, legacy]
+}
+
+function ensureProfileDirectory(filePath: string): void {
+  try {
+    mkdirSync(dirname(filePath), { recursive: true, mode: 0o700 })
+  } catch (error) {
+    if (getErrnoCode(error) !== 'EEXIST') {
+      throw error
+    }
+  }
+}
+
+function readProfileFile(filePath: string): ProfileFile | null {
+  if (!existsSync(filePath)) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as Partial<ProfileFile>
+    if (!isProviderProfile(parsed.profile) || !parsed.env || typeof parsed.env !== 'object') {
+      return null
+    }
+
+    return {
+      profile: parsed.profile,
+      env: parsed.env,
+      createdAt:
+        typeof parsed.createdAt === 'string'
+          ? parsed.createdAt
+          : new Date().toISOString(),
+    }
+  } catch {
+    return null
+  }
 }
 
 function normalizeProfileModel(
@@ -163,6 +297,7 @@ function normalizeProfileModel(
 
 export function isProviderProfile(value: unknown): value is ProviderProfile {
   return (
+    value === 'anthropic' ||
     value === 'openai' ||
     value === 'ollama' ||
     value === 'codex' ||
@@ -170,8 +305,31 @@ export function isProviderProfile(value: unknown): value is ProviderProfile {
     value === 'atomic-chat' ||
     value === 'nvidia-nim' ||
     value === 'minimax' ||
-    value === 'mistral'
+    value === 'mistral' ||
+    value === 'github' ||
+    value === 'bedrock' ||
+    value === 'vertex' ||
+    value === 'xai'
   )
+}
+
+export function buildGithubProfileEnv(options: {
+  model?: string | null
+  baseUrl?: string | null
+}): ProfileEnv {
+  const env: ProfileEnv = {
+    OPENAI_MODEL:
+      normalizeProfileModel(
+        sanitizeProviderConfigValue(options.model),
+      ) || 'github:copilot',
+  }
+
+  const baseUrl = sanitizeProviderConfigValue(options.baseUrl)
+  if (baseUrl) {
+    env.OPENAI_BASE_URL = baseUrl
+  }
+
+  return env
 }
 
 export function buildOllamaProfileEnv(
@@ -198,6 +356,44 @@ export function buildAtomicChatProfileEnv(
     OPENAI_BASE_URL: options.getAtomicChatChatBaseUrl(options.baseUrl ?? undefined),
     OPENAI_MODEL: model,
   }
+}
+
+export function buildBedrockProfileEnv(options: {
+  model?: string | null
+  baseUrl?: string | null
+}): ProfileEnv {
+  const env: ProfileEnv = {
+    ANTHROPIC_MODEL:
+      normalizeProfileModel(
+        sanitizeProviderConfigValue(options.model),
+      ) || 'claude-sonnet-4-6',
+  }
+
+  const baseUrl = sanitizeProviderConfigValue(options.baseUrl)
+  if (baseUrl) {
+    env.ANTHROPIC_BEDROCK_BASE_URL = baseUrl
+  }
+
+  return env
+}
+
+export function buildVertexProfileEnv(options: {
+  model?: string | null
+  baseUrl?: string | null
+}): ProfileEnv {
+  const env: ProfileEnv = {
+    ANTHROPIC_MODEL:
+      normalizeProfileModel(
+        sanitizeProviderConfigValue(options.model),
+      ) || 'claude-sonnet-4-6',
+  }
+
+  const baseUrl = sanitizeProviderConfigValue(options.baseUrl)
+  if (baseUrl) {
+    env.ANTHROPIC_VERTEX_BASE_URL = baseUrl
+  }
+
+  return env
 }
 
 export function buildNvidiaNimProfileEnv(options: {
@@ -245,8 +441,11 @@ export function buildMiniMaxProfileEnv(options: {
     return null
   }
 
-  const defaultBaseUrl = 'https://api.minimax.io/v1'
-  const defaultModel = 'MiniMax-M2.5'
+  const defaultBaseUrl = getRouteDefaultBaseUrl('minimax')
+  const defaultModel = getRouteDefaultModel('minimax')
+  if (!defaultBaseUrl || !defaultModel) {
+    throw new Error('MiniMax route defaults are missing from integration metadata.')
+  }
   const secretSource: SecretValueSource = { OPENAI_API_KEY: key }
 
   return {
@@ -269,6 +468,90 @@ export function buildMiniMaxProfileEnv(options: {
   }
 }
 
+export function buildVeniceProfileEnv(options: {
+  model?: string | null
+  baseUrl?: string | null
+  apiKey?: string | null
+  processEnv?: NodeJS.ProcessEnv
+}): ProfileEnv | null {
+  const processEnv = options.processEnv ?? process.env
+  const key = sanitizeApiKey(options.apiKey ?? processEnv.VENICE_API_KEY)
+  if (!key) {
+    return null
+  }
+
+  const defaultBaseUrl = getRouteDefaultBaseUrl('venice')
+  const defaultModel = getRouteDefaultModel('venice')
+  if (!defaultBaseUrl || !defaultModel) {
+    throw new Error('Venice route defaults are missing from integration metadata.')
+  }
+  const secretSource: SecretValueSource = {
+    OPENAI_API_KEY: key,
+    VENICE_API_KEY: key,
+  }
+
+  return {
+    OPENAI_BASE_URL:
+      sanitizeProviderConfigValue(options.baseUrl, secretSource) ||
+      sanitizeProviderConfigValue(processEnv.OPENAI_BASE_URL, secretSource) ||
+      defaultBaseUrl,
+    OPENAI_MODEL:
+      normalizeProfileModel(
+        sanitizeProviderConfigValue(options.model, secretSource),
+      ) ||
+      normalizeProfileModel(
+        sanitizeProviderConfigValue(processEnv.OPENAI_MODEL, secretSource),
+      ) ||
+      defaultModel,
+    OPENAI_API_KEY: key,
+    VENICE_API_KEY: key,
+  }
+}
+
+export function buildXiaomiMimoProfileEnv(options: {
+  model?: string | null
+  baseUrl?: string | null
+  apiKey?: string | null
+  processEnv?: NodeJS.ProcessEnv
+}): ProfileEnv | null {
+  const processEnv = options.processEnv ?? process.env
+  const key = sanitizeApiKey(options.apiKey ?? processEnv.MIMO_API_KEY)
+  if (!key) {
+    return null
+  }
+
+  const defaultBaseUrl = getRouteDefaultBaseUrl('xiaomi-mimo')
+  const defaultModel = getRouteDefaultModel('xiaomi-mimo')
+  if (!defaultBaseUrl || !defaultModel) {
+    throw new Error('Xiaomi MiMo route defaults are missing from integration metadata.')
+  }
+  const secretSource: SecretValueSource = {
+    OPENAI_API_KEY: key,
+    MIMO_API_KEY: key,
+  }
+
+  return {
+    OPENAI_BASE_URL:
+      normalizeXiaomiMimoBaseUrl(
+        sanitizeProviderConfigValue(options.baseUrl, secretSource),
+      ) ||
+      normalizeXiaomiMimoBaseUrl(
+        sanitizeProviderConfigValue(processEnv.OPENAI_BASE_URL, secretSource),
+      ) ||
+      defaultBaseUrl,
+    OPENAI_MODEL:
+      normalizeProfileModel(
+        sanitizeProviderConfigValue(options.model, secretSource),
+      ) ||
+      normalizeProfileModel(
+        sanitizeProviderConfigValue(processEnv.OPENAI_MODEL, secretSource),
+      ) ||
+      defaultModel,
+    OPENAI_API_KEY: key,
+    MIMO_API_KEY: key,
+  }
+}
+
 export function buildGeminiProfileEnv(options: {
   model?: string | null
   baseUrl?: string | null
@@ -280,8 +563,8 @@ export function buildGeminiProfileEnv(options: {
   const authMode = options.authMode ?? 'api-key'
   const key = sanitizeApiKey(
     options.apiKey ??
-      processEnv.GEMINI_API_KEY ??
-      processEnv.GOOGLE_API_KEY,
+    processEnv.GEMINI_API_KEY ??
+    processEnv.GOOGLE_API_KEY,
   )
   if (authMode === 'api-key' && !key) {
     return null
@@ -320,16 +603,26 @@ export function buildOpenAIProfileEnv(options: {
   model?: string | null
   baseUrl?: string | null
   apiKey?: string | null
+  apiFormat?: 'chat_completions' | 'responses' | null
+  authHeader?: string | null
+  authScheme?: 'bearer' | 'raw' | null
+  authHeaderValue?: string | null
   processEnv?: NodeJS.ProcessEnv
 }): ProfileEnv | null {
   const processEnv = options.processEnv ?? process.env
   const key = sanitizeApiKey(options.apiKey ?? processEnv.OPENAI_API_KEY)
-  if (!key) {
+  const authHeaderValue = sanitizeApiKey(
+    options.authHeaderValue ?? processEnv.OPENAI_AUTH_HEADER_VALUE,
+  )
+  if (!key && !authHeaderValue) {
     return null
   }
 
   const defaultModel = getGoalDefaultOpenAIModel(options.goal)
-  const secretSource: SecretValueSource = { OPENAI_API_KEY: key }
+  const secretSource: SecretValueSource = {
+    OPENAI_API_KEY: key,
+    OPENAI_AUTH_HEADER_VALUE: authHeaderValue,
+  }
   const shellOpenAIModel = normalizeProfileModel(
     sanitizeProviderConfigValue(
       processEnv.OPENAI_MODEL,
@@ -344,8 +637,9 @@ export function buildOpenAIProfileEnv(options: {
     model: shellOpenAIModel,
     baseUrl: shellOpenAIBaseUrl,
     fallbackModel: defaultModel,
+    apiFormat: processEnv.OPENAI_API_FORMAT,
   })
-  const useShellOpenAIConfig = shellOpenAIRequest.transport === 'chat_completions'
+  const useShellOpenAIConfig = shellOpenAIRequest.transport !== 'codex_responses'
 
   return {
     OPENAI_BASE_URL:
@@ -358,7 +652,11 @@ export function buildOpenAIProfileEnv(options: {
       ) ||
       (useShellOpenAIConfig ? shellOpenAIModel : undefined) ||
       defaultModel,
-    OPENAI_API_KEY: key,
+    ...(options.apiFormat ? { OPENAI_API_FORMAT: options.apiFormat } : {}),
+    ...(options.authHeader ? { OPENAI_AUTH_HEADER: options.authHeader } : {}),
+    ...(options.authScheme ? { OPENAI_AUTH_SCHEME: options.authScheme } : {}),
+    ...(authHeaderValue ? { OPENAI_AUTH_HEADER_VALUE: authHeaderValue } : {}),
+    ...(key ? { OPENAI_API_KEY: key } : {}),
   }
 }
 
@@ -473,6 +771,96 @@ export function buildBankrProfileEnv(options: {
   return env
 }
 
+function buildXaiProfileEnv(options: {
+  model?: string | null
+  baseUrl?: string | null
+  apiKey?: string | null
+  processEnv?: NodeJS.ProcessEnv
+}): ProfileEnv {
+  const processEnv = options.processEnv ?? process.env
+  const key = sanitizeApiKey(options.apiKey ?? processEnv.XAI_API_KEY)
+  const secretSource: SecretValueSource = {
+    OPENAI_API_KEY: key,
+    XAI_API_KEY: key,
+  }
+  const defaultBaseUrl = getRouteDefaultBaseUrl('xai') ?? 'https://api.x.ai/v1'
+  const defaultModel = getRouteDefaultModel('xai') ?? 'grok-4.3'
+  const env: ProfileEnv = {
+    OPENAI_BASE_URL:
+      sanitizeProviderConfigValue(options.baseUrl, secretSource) ||
+      sanitizeProviderConfigValue(processEnv.OPENAI_BASE_URL, secretSource) ||
+      defaultBaseUrl,
+    OPENAI_MODEL:
+      normalizeProfileModel(
+        sanitizeProviderConfigValue(options.model, secretSource),
+      ) ||
+      normalizeProfileModel(
+        sanitizeProviderConfigValue(processEnv.OPENAI_MODEL, secretSource),
+      ) ||
+      defaultModel,
+  }
+
+  if (key) {
+    env.OPENAI_API_KEY = key
+    env.XAI_API_KEY = key
+  }
+
+  return env
+}
+
+function getCompatibilityProfileFlag(
+  compatibilityMode: CompatibilityProfileMode,
+):
+  | 'CLAUDE_CODE_USE_OPENAI'
+  | 'CLAUDE_CODE_USE_GITHUB'
+  | 'CLAUDE_CODE_USE_GEMINI'
+  | 'CLAUDE_CODE_USE_MISTRAL'
+  | 'CLAUDE_CODE_USE_BEDROCK'
+  | 'CLAUDE_CODE_USE_VERTEX'
+  | undefined {
+  switch (compatibilityMode) {
+    case 'openai':
+      return 'CLAUDE_CODE_USE_OPENAI'
+    case 'github':
+      return 'CLAUDE_CODE_USE_GITHUB'
+    case 'gemini':
+      return 'CLAUDE_CODE_USE_GEMINI'
+    case 'mistral':
+      return 'CLAUDE_CODE_USE_MISTRAL'
+    case 'bedrock':
+      return 'CLAUDE_CODE_USE_BEDROCK'
+    case 'vertex':
+      return 'CLAUDE_CODE_USE_VERTEX'
+    default:
+      return undefined
+  }
+}
+
+export function clearManagedProfileEnv(
+  targetEnv: NodeJS.ProcessEnv,
+): void {
+  for (const key of PROFILE_ENV_KEYS) {
+    delete targetEnv[key]
+  }
+}
+
+export function buildCompatibilityProcessEnv(options: {
+  compatibilityMode: CompatibilityProfileMode
+  profileEnv: ProfileEnv
+  processEnv?: NodeJS.ProcessEnv
+}): NodeJS.ProcessEnv {
+  const env = { ...(options.processEnv ?? process.env) }
+  const nextEnv: NodeJS.ProcessEnv = { ...options.profileEnv }
+  const flag = getCompatibilityProfileFlag(options.compatibilityMode)
+
+  if (flag) {
+    nextEnv[flag] = '1'
+  }
+
+  applyProfileEnvToProcessEnv(env, nextEnv)
+  return env
+}
+
 export function buildCodexOAuthProfileEnv(
   tokens: {
     accessToken: string
@@ -520,37 +908,28 @@ export function isPersistedCodexOAuthProfile(
 export function clearPersistedCodexOAuthProfile(
   options?: ProfileFileLocation,
 ): string | null {
-  const persisted = loadProfileFile(options)
-  if (!isPersistedCodexOAuthProfile(persisted)) {
-    return null
+  let removedPath: string | null = null
+
+  for (const filePath of resolveProfileFileCleanupPaths(options)) {
+    const persisted = readProfileFile(filePath)
+    if (isPersistedCodexOAuthProfile(persisted)) {
+      rmSync(filePath, { force: true })
+      removedPath ??= filePath
+    }
   }
 
-  return deleteProfileFile(options)
+  return removedPath
 }
 
 export function loadProfileFile(options?: ProfileFileLocation): ProfileFile | null {
-  const filePath = resolveProfileFilePath(options)
-  if (!existsSync(filePath)) {
-    return null
+  for (const filePath of resolveProfileFileReadPaths(options)) {
+    const profile = readProfileFile(filePath)
+    if (profile) {
+      return profile
+    }
   }
 
-  try {
-    const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as Partial<ProfileFile>
-    if (!isProviderProfile(parsed.profile) || !parsed.env || typeof parsed.env !== 'object') {
-      return null
-    }
-
-    return {
-      profile: parsed.profile,
-      env: parsed.env,
-      createdAt:
-        typeof parsed.createdAt === 'string'
-          ? parsed.createdAt
-          : new Date().toISOString(),
-    }
-  } catch {
-    return null
-  }
+  return null
 }
 
 export function saveProfileFile(
@@ -558,6 +937,7 @@ export function saveProfileFile(
   options?: ProfileFileLocation,
 ): string {
   const filePath = resolveProfileFilePath(options)
+  ensureProfileDirectory(filePath)
   writeFileSync(filePath, JSON.stringify(profileFile, null, 2), {
     encoding: 'utf8',
     mode: 0o600,
@@ -567,7 +947,12 @@ export function saveProfileFile(
 
 export function deleteProfileFile(options?: ProfileFileLocation): string {
   const filePath = resolveProfileFilePath(options)
-  rmSync(filePath, { force: true })
+  const cleanupPaths = new Set(resolveProfileFileCleanupPaths(options))
+
+  for (const cleanupPath of cleanupPaths) {
+    rmSync(cleanupPath, { force: true })
+  }
+
   return filePath
 }
 
@@ -584,6 +969,61 @@ export function hasExplicitProviderSelection(
     isEnvTruthy(processEnv.CLAUDE_CODE_USE_GITHUB) ||
     isEnvTruthy(processEnv.CLAUDE_CODE_USE_GEMINI) ||
     isEnvTruthy(processEnv.CLAUDE_CODE_USE_MISTRAL) ||
+    isEnvTruthy(processEnv.CLAUDE_CODE_USE_BEDROCK) ||
+    isEnvTruthy(processEnv.CLAUDE_CODE_USE_VERTEX) ||
+    isEnvTruthy(processEnv.CLAUDE_CODE_USE_FOUNDRY)
+  )
+}
+
+function hasConcreteProviderSelection(
+  processEnv: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (processEnv.CLAUDE_CODE_PROVIDER_PROFILE_ENV_APPLIED === '1') {
+    return true
+  }
+
+  if (isEnvTruthy(processEnv.CLAUDE_CODE_USE_OPENAI)) {
+    return (
+      sanitizeProviderConfigValue(processEnv.OPENAI_BASE_URL) !== undefined ||
+      sanitizeProviderConfigValue(processEnv.OPENAI_API_BASE) !== undefined ||
+      normalizeProfileModel(
+        sanitizeProviderConfigValue(processEnv.OPENAI_MODEL),
+      ) !== undefined
+    )
+  }
+
+  if (isEnvTruthy(processEnv.CLAUDE_CODE_USE_GEMINI)) {
+    return (
+      sanitizeProviderConfigValue(processEnv.GEMINI_BASE_URL) !== undefined ||
+      normalizeProfileModel(
+        sanitizeProviderConfigValue(processEnv.GEMINI_MODEL),
+      ) !== undefined ||
+      sanitizeApiKey(processEnv.GEMINI_API_KEY) !== undefined ||
+      sanitizeApiKey(processEnv.GOOGLE_API_KEY) !== undefined
+    )
+  }
+
+  if (isEnvTruthy(processEnv.CLAUDE_CODE_USE_MISTRAL)) {
+    return (
+      sanitizeProviderConfigValue(processEnv.MISTRAL_BASE_URL) !== undefined ||
+      normalizeProfileModel(
+        sanitizeProviderConfigValue(processEnv.MISTRAL_MODEL),
+      ) !== undefined ||
+      sanitizeApiKey(processEnv.MISTRAL_API_KEY) !== undefined
+    )
+  }
+
+  if (isEnvTruthy(processEnv.CLAUDE_CODE_USE_GITHUB)) {
+    return (
+      sanitizeApiKey(processEnv.GITHUB_TOKEN) !== undefined ||
+      sanitizeApiKey(processEnv.GH_TOKEN) !== undefined ||
+      normalizeProfileModel(
+        sanitizeProviderConfigValue(processEnv.OPENAI_MODEL),
+      ) !== undefined
+    )
+  }
+
+  return (
     isEnvTruthy(processEnv.CLAUDE_CODE_USE_BEDROCK) ||
     isEnvTruthy(processEnv.CLAUDE_CODE_USE_VERTEX) ||
     isEnvTruthy(processEnv.CLAUDE_CODE_USE_FOUNDRY)
@@ -622,6 +1062,14 @@ export async function buildLaunchEnv(options: {
     persistedEnv.OPENAI_BASE_URL,
     persistedEnv,
   )
+  const persistedOpenAIApiFormat = persistedEnv.OPENAI_API_FORMAT
+  const persistedOpenAIAuthHeader = persistedEnv.OPENAI_AUTH_HEADER
+  const persistedOpenAIAuthScheme = persistedEnv.OPENAI_AUTH_SCHEME
+  const persistedOpenAIAuthHeaderValue = sanitizeApiKey(
+    persistedEnv.OPENAI_AUTH_HEADER_VALUE,
+  )
+  const persistedCustomHeaders = persistedEnv.ANTHROPIC_CUSTOM_HEADERS
+  const shellCustomHeaders = processEnv.ANTHROPIC_CUSTOM_HEADERS
   const shellOpenAIModel = normalizeProfileModel(
     sanitizeProviderConfigValue(
       processEnv.OPENAI_MODEL,
@@ -664,48 +1112,134 @@ export async function buildLaunchEnv(options: {
   const persistedGeminiAuthMode = persistedEnv.GEMINI_AUTH_MODE
 
   if (hasExplicitProviderSelection(processEnv)) {
-    for (let provider of PROVIDERS) {
-      if (provider === "anthropic") {
-        continue;
-      }
+    const explicitProfileOverrides: Array<[string, ProviderProfile]> = [
+      ['CLAUDE_CODE_USE_GITHUB', 'github'],
+      ['CLAUDE_CODE_USE_BEDROCK', 'bedrock'],
+      ['CLAUDE_CODE_USE_VERTEX', 'vertex'],
+      ['CLAUDE_CODE_USE_MISTRAL', 'mistral'],
+      ['CLAUDE_CODE_USE_GEMINI', 'gemini'],
+      ['CLAUDE_CODE_USE_OPENAI', 'openai'],
+    ]
 
-      const env_key_name = `CLAUDE_CODE_USE_${provider.toUpperCase()}`
-
-      if (env_key_name in processEnv && isEnvTruthy(processEnv[env_key_name])) {
-        options.profile = provider;
+    for (const [envKey, provider] of explicitProfileOverrides) {
+      if (isEnvTruthy(processEnv[envKey])) {
+        const isCodexOAuthProfile =
+          options.profile === 'codex' &&
+          provider === 'openai' &&
+          persistedEnv.CODEX_CREDENTIAL_SOURCE === 'oauth'
+        if (!isCodexOAuthProfile) {
+          options.profile = provider
+        }
+        break
       }
     }
   }
 
+  if (options.profile === 'github') {
+    return buildCompatibilityProcessEnv({
+      processEnv,
+      compatibilityMode: 'github',
+      profileEnv: buildGithubProfileEnv({
+        model: shellOpenAIModel || persistedOpenAIModel || 'github:copilot',
+        baseUrl: shellOpenAIBaseUrl || persistedOpenAIBaseUrl,
+      }),
+    })
+  }
+
+  if (options.profile === 'anthropic') {
+    const anthropicBaseUrl =
+      sanitizeProviderConfigValue(processEnv.ANTHROPIC_BASE_URL) ||
+      sanitizeProviderConfigValue(persistedEnv.ANTHROPIC_BASE_URL)
+    const anthropicApiKey =
+      sanitizeApiKey(processEnv.ANTHROPIC_API_KEY) ||
+      sanitizeApiKey(persistedEnv.ANTHROPIC_API_KEY)
+
+    return buildCompatibilityProcessEnv({
+      processEnv,
+      compatibilityMode: 'anthropic',
+      profileEnv: {
+        ...(anthropicBaseUrl
+          ? { ANTHROPIC_BASE_URL: anthropicBaseUrl }
+          : {}),
+        ANTHROPIC_MODEL:
+          normalizeProfileModel(
+            sanitizeProviderConfigValue(processEnv.ANTHROPIC_MODEL),
+          ) ||
+          normalizeProfileModel(
+            sanitizeProviderConfigValue(persistedEnv.ANTHROPIC_MODEL),
+          ) ||
+          'claude-sonnet-4-6',
+        ...(anthropicApiKey
+          ? { ANTHROPIC_API_KEY: anthropicApiKey }
+          : {}),
+      },
+    })
+  }
+
+  if (options.profile === 'bedrock') {
+    const bedrockBaseUrl =
+      sanitizeProviderConfigValue(processEnv.ANTHROPIC_BEDROCK_BASE_URL) ||
+      sanitizeProviderConfigValue(persistedEnv.ANTHROPIC_BEDROCK_BASE_URL)
+
+    return buildCompatibilityProcessEnv({
+      processEnv,
+      compatibilityMode: 'bedrock',
+      profileEnv: buildBedrockProfileEnv({
+        model:
+          normalizeProfileModel(
+            sanitizeProviderConfigValue(processEnv.ANTHROPIC_MODEL),
+          ) ||
+          normalizeProfileModel(
+            sanitizeProviderConfigValue(persistedEnv.ANTHROPIC_MODEL),
+          ) ||
+          'claude-sonnet-4-6',
+        baseUrl: bedrockBaseUrl,
+      }),
+    })
+  }
+
+  if (options.profile === 'vertex') {
+    const vertexBaseUrl =
+      sanitizeProviderConfigValue(processEnv.ANTHROPIC_VERTEX_BASE_URL) ||
+      sanitizeProviderConfigValue(persistedEnv.ANTHROPIC_VERTEX_BASE_URL)
+
+    return buildCompatibilityProcessEnv({
+      processEnv,
+      compatibilityMode: 'vertex',
+      profileEnv: buildVertexProfileEnv({
+        model:
+          normalizeProfileModel(
+            sanitizeProviderConfigValue(processEnv.ANTHROPIC_MODEL),
+          ) ||
+          normalizeProfileModel(
+            sanitizeProviderConfigValue(persistedEnv.ANTHROPIC_MODEL),
+          ) ||
+          'claude-sonnet-4-6',
+        baseUrl: vertexBaseUrl,
+      }),
+    })
+  }
+
   if (options.profile === 'gemini') {
-    const env: NodeJS.ProcessEnv = {
-      ...processEnv,
-      CLAUDE_CODE_USE_GEMINI: '1',
+    const env: ProfileEnv = {
+      GEMINI_MODEL:
+        shellGeminiModel ||
+        persistedGeminiModel ||
+        DEFAULT_GEMINI_MODEL,
+      GEMINI_BASE_URL:
+        shellGeminiBaseUrl ||
+        persistedGeminiBaseUrl ||
+        DEFAULT_GEMINI_BASE_URL,
     }
-
-    delete env.CLAUDE_CODE_USE_OPENAI
-    delete env.CLAUDE_CODE_USE_GITHUB
-    delete env.CODEX_CREDENTIAL_SOURCE
-
-    env.GEMINI_MODEL =
-      shellGeminiModel ||
-      persistedGeminiModel ||
-      DEFAULT_GEMINI_MODEL
-    env.GEMINI_BASE_URL =
-      shellGeminiBaseUrl ||
-      persistedGeminiBaseUrl ||
-      DEFAULT_GEMINI_BASE_URL
 
     const geminiAuthMode =
       persistedGeminiAuthMode === 'access-token' ||
-      persistedGeminiAuthMode === 'adc'
+        persistedGeminiAuthMode === 'adc'
         ? persistedGeminiAuthMode
         : 'api-key'
     const geminiKey = shellGeminiKey || persistedGeminiKey
     if (geminiAuthMode === 'api-key' && geminiKey) {
       env.GEMINI_API_KEY = geminiKey
-    } else {
-      delete env.GEMINI_API_KEY
     }
     env.GEMINI_AUTH_MODE = geminiAuthMode
     if (geminiAuthMode === 'access-token') {
@@ -713,37 +1247,17 @@ export async function buildLaunchEnv(options: {
         shellGeminiAccessToken || storedGeminiAccessToken
       if (geminiAccessToken) {
         env.GEMINI_ACCESS_TOKEN = geminiAccessToken
-      } else {
-        delete env.GEMINI_ACCESS_TOKEN
       }
-    } else {
-      delete env.GEMINI_ACCESS_TOKEN
     }
 
-    delete env.GOOGLE_API_KEY
-    delete env.OPENAI_BASE_URL
-    delete env.OPENAI_MODEL
-    delete env.OPENAI_API_KEY
-    delete env.CODEX_API_KEY
-    delete env.CHATGPT_ACCOUNT_ID
-    delete env.CODEX_ACCOUNT_ID
-
-    return env
+    return buildCompatibilityProcessEnv({
+      processEnv,
+      compatibilityMode: 'gemini',
+      profileEnv: env,
+    })
   }
 
   if (options.profile === 'mistral') {
-    const env: NodeJS.ProcessEnv = {
-      ...processEnv,
-      CLAUDE_CODE_USE_MISTRAL: '1',
-    }
-
-    delete env.CLAUDE_CODE_USE_OPENAI
-    delete env.CLAUDE_CODE_USE_GITHUB
-    delete env.CLAUDE_CODE_USE_GEMINI
-    delete env.CLAUDE_CODE_USE_BEDROCK
-    delete env.CLAUDE_CODE_USE_VERTEX
-    delete env.CLAUDE_CODE_USE_FOUNDRY
-
     const shellMistralModel = normalizeProfileModel(
       sanitizeProviderConfigValue(
         processEnv.MISTRAL_MODEL,
@@ -761,61 +1275,56 @@ export async function buildLaunchEnv(options: {
       persistedEnv.MISTRAL_BASE_URL,
     )
 
-    env.MISTRAL_MODEL =
-      shellMistralModel || persistedMistralModel || DEFAULT_MISTRAL_MODEL
-
     const shellMistralKey = sanitizeApiKey(
       processEnv.MISTRAL_API_KEY,
     )
     const persistedMistralKey = sanitizeApiKey(persistedEnv.MISTRAL_API_KEY)
     const mistralKey = shellMistralKey || persistedMistralKey
 
+    const env: ProfileEnv = {
+      MISTRAL_MODEL:
+        shellMistralModel || persistedMistralModel || DEFAULT_MISTRAL_MODEL,
+    }
+
     if (mistralKey) {
       env.MISTRAL_API_KEY = mistralKey
-    } else {
-      delete env.MISTRAL_API_KEY
     }
 
     if (shellMistralBaseUrl || persistedMistralBaseUrl) {
       env.MISTRAL_BASE_URL = shellMistralBaseUrl || persistedMistralBaseUrl
-    } else {
-      delete env.MISTRAL_BASE_URL
     }
 
-    delete env.GEMINI_API_KEY
-    delete env.GEMINI_AUTH_MODE
-    delete env.GEMINI_ACCESS_TOKEN
-    delete env.GEMINI_MODEL
-    delete env.GEMINI_BASE_URL
-    delete env.GOOGLE_API_KEY
-    delete env.OPENAI_BASE_URL
-    delete env.OPENAI_MODEL
-    delete env.OPENAI_API_KEY
-    delete env.CODEX_API_KEY
-    delete env.CHATGPT_ACCOUNT_ID
-    delete env.CODEX_ACCOUNT_ID
-
-    return env
+    return buildCompatibilityProcessEnv({
+      processEnv,
+      compatibilityMode: 'mistral',
+      profileEnv: env,
+    })
   }
 
-  const env: NodeJS.ProcessEnv = {
-    ...processEnv,
-    CLAUDE_CODE_USE_OPENAI: '1',
-  }
+  if (options.profile === 'xai') {
+    const xaiKey =
+      sanitizeApiKey(processEnv.XAI_API_KEY) ||
+      sanitizeApiKey(persistedEnv.XAI_API_KEY) ||
+      sanitizeApiKey(processEnv.OPENAI_API_KEY) ||
+      sanitizeApiKey(persistedEnv.OPENAI_API_KEY)
 
-  delete env.CLAUDE_CODE_USE_MISTRAL
-  delete env.CLAUDE_CODE_USE_BEDROCK
-  delete env.CLAUDE_CODE_USE_VERTEX
-  delete env.CLAUDE_CODE_USE_FOUNDRY
-  delete env.CLAUDE_CODE_USE_GEMINI
-  delete env.CLAUDE_CODE_USE_GITHUB
-  delete env.CODEX_CREDENTIAL_SOURCE
-  delete env.GEMINI_API_KEY
-  delete env.GEMINI_AUTH_MODE
-  delete env.GEMINI_ACCESS_TOKEN
-  delete env.GEMINI_MODEL
-  delete env.GEMINI_BASE_URL
-  delete env.GOOGLE_API_KEY
+    const env = buildXaiProfileEnv({
+      model: shellOpenAIModel || persistedOpenAIModel,
+      baseUrl: shellOpenAIBaseUrl || persistedOpenAIBaseUrl,
+      apiKey: xaiKey,
+      processEnv,
+    })
+    const customHeaders = shellCustomHeaders || persistedCustomHeaders
+    if (customHeaders) {
+      env.ANTHROPIC_CUSTOM_HEADERS = customHeaders
+    }
+
+    return buildCompatibilityProcessEnv({
+      processEnv,
+      compatibilityMode: 'openai',
+      profileEnv: env,
+    })
+  }
 
   if (options.profile === 'ollama') {
     const getOllamaBaseUrl =
@@ -823,17 +1332,16 @@ export async function buildLaunchEnv(options: {
     const resolveOllamaModel =
       options.resolveOllamaDefaultModel ?? (async () => 'llama3.1:8b')
 
-    env.OPENAI_BASE_URL = persistedOpenAIBaseUrl || getOllamaBaseUrl()
-    env.OPENAI_MODEL =
-      persistedOpenAIModel ||
-      (await resolveOllamaModel(options.goal))
-
-    delete env.OPENAI_API_KEY
-    delete env.CODEX_API_KEY
-    delete env.CHATGPT_ACCOUNT_ID
-    delete env.CODEX_ACCOUNT_ID
-
-    return env
+    return buildCompatibilityProcessEnv({
+      processEnv,
+      compatibilityMode: 'openai',
+      profileEnv: {
+        OPENAI_BASE_URL: persistedOpenAIBaseUrl || getOllamaBaseUrl(),
+        OPENAI_MODEL:
+          persistedOpenAIModel ||
+          (await resolveOllamaModel(options.goal)),
+      },
+    })
   }
 
   if (options.profile === 'atomic-chat') {
@@ -842,52 +1350,49 @@ export async function buildLaunchEnv(options: {
     const resolveModel =
       options.resolveAtomicChatDefaultModel ?? (async () => null as string | null)
 
-    env.OPENAI_BASE_URL = persistedEnv.OPENAI_BASE_URL || getAtomicChatBaseUrl()
-    env.OPENAI_MODEL =
-      persistedEnv.OPENAI_MODEL ||
-      (await resolveModel()) ||
-      ''
-
-    delete env.OPENAI_API_KEY
-    delete env.CODEX_API_KEY
-    delete env.CHATGPT_ACCOUNT_ID
-    delete env.CODEX_ACCOUNT_ID
-
-    return env
+    return buildCompatibilityProcessEnv({
+      processEnv,
+      compatibilityMode: 'openai',
+      profileEnv: {
+        OPENAI_BASE_URL: persistedEnv.OPENAI_BASE_URL || getAtomicChatBaseUrl(),
+        OPENAI_MODEL:
+          persistedEnv.OPENAI_MODEL ||
+          (await resolveModel()) ||
+          '',
+      },
+    })
   }
 
   if (options.profile === 'codex') {
-    env.OPENAI_BASE_URL =
-      persistedOpenAIBaseUrl && isCodexBaseUrl(persistedOpenAIBaseUrl)
-        ? persistedOpenAIBaseUrl
-        : DEFAULT_CODEX_BASE_URL
-    env.OPENAI_MODEL = persistedOpenAIModel || 'codexplan'
-    delete env.OPENAI_API_KEY
-
-    const codexKey =
-      sanitizeApiKey(processEnv.CODEX_API_KEY) ||
+    const isCodexOAuthProfile = persistedEnv.CODEX_CREDENTIAL_SOURCE === 'oauth'
+    const codexKey = isCodexOAuthProfile
+      ? undefined
+      : sanitizeApiKey(processEnv.CODEX_API_KEY) ||
       sanitizeApiKey(persistedEnv.CODEX_API_KEY)
-    const liveCodexCredentials = resolveCodexApiCredentials(processEnv)
-    const codexAccountId =
-      processEnv.CHATGPT_ACCOUNT_ID ||
+    const liveCodexCredentials = isCodexOAuthProfile
+      ? undefined
+      : resolveCodexApiCredentials(processEnv)
+    const codexAccountId = isCodexOAuthProfile
+      ? persistedEnv.CHATGPT_ACCOUNT_ID || persistedEnv.CODEX_ACCOUNT_ID
+      : processEnv.CHATGPT_ACCOUNT_ID ||
       processEnv.CODEX_ACCOUNT_ID ||
-      liveCodexCredentials.accountId ||
+      liveCodexCredentials?.accountId ||
       persistedEnv.CHATGPT_ACCOUNT_ID ||
       persistedEnv.CODEX_ACCOUNT_ID
-    if (codexKey) {
-      env.CODEX_API_KEY = codexKey
-    } else {
-      delete env.CODEX_API_KEY
-    }
 
-    if (codexAccountId) {
-      env.CHATGPT_ACCOUNT_ID = codexAccountId
-    } else {
-      delete env.CHATGPT_ACCOUNT_ID
-    }
-    delete env.CODEX_ACCOUNT_ID
-
-    return env
+    return buildCompatibilityProcessEnv({
+      processEnv,
+      compatibilityMode: 'openai',
+      profileEnv: {
+        OPENAI_BASE_URL:
+          persistedOpenAIBaseUrl && isCodexBaseUrl(persistedOpenAIBaseUrl)
+            ? persistedOpenAIBaseUrl
+            : DEFAULT_CODEX_BASE_URL,
+        OPENAI_MODEL: persistedOpenAIModel || 'codexplan',
+        ...(codexKey ? { CODEX_API_KEY: codexKey } : {}),
+        ...(codexAccountId ? { CHATGPT_ACCOUNT_ID: codexAccountId } : {}),
+      },
+    })
   }
 
   const defaultOpenAIModel = getGoalDefaultOpenAIModel(options.goal)
@@ -895,41 +1400,85 @@ export async function buildLaunchEnv(options: {
     model: shellOpenAIModel,
     baseUrl: shellOpenAIBaseUrl,
     fallbackModel: defaultOpenAIModel,
+    apiFormat: processEnv.OPENAI_API_FORMAT,
   })
   const persistedOpenAIRequest = resolveProviderRequest({
     model: persistedOpenAIModel,
     baseUrl: persistedOpenAIBaseUrl,
     fallbackModel: defaultOpenAIModel,
+    apiFormat: persistedOpenAIApiFormat,
   })
-  const useShellOpenAIConfig = shellOpenAIRequest.transport === 'chat_completions'
+  const useShellOpenAIConfig = shellOpenAIRequest.transport !== 'codex_responses'
   const usePersistedOpenAIConfig =
     (!persistedOpenAIModel && !persistedOpenAIBaseUrl) ||
-    persistedOpenAIRequest.transport === 'chat_completions'
+    persistedOpenAIRequest.transport !== 'codex_responses'
 
-  env.OPENAI_BASE_URL =
-    (useShellOpenAIConfig ? shellOpenAIBaseUrl : undefined) ||
-    (usePersistedOpenAIConfig ? persistedOpenAIBaseUrl : undefined) ||
-    DEFAULT_OPENAI_BASE_URL
-  env.OPENAI_MODEL =
-    (useShellOpenAIConfig ? shellOpenAIModel : undefined) ||
-    (usePersistedOpenAIConfig ? persistedOpenAIModel : undefined) ||
-    defaultOpenAIModel
+  const env: ProfileEnv = {
+    OPENAI_BASE_URL:
+      (useShellOpenAIConfig ? shellOpenAIBaseUrl : undefined) ||
+      (usePersistedOpenAIConfig ? persistedOpenAIBaseUrl : undefined) ||
+      DEFAULT_OPENAI_BASE_URL,
+    OPENAI_MODEL:
+      (useShellOpenAIConfig ? shellOpenAIModel : undefined) ||
+      (usePersistedOpenAIConfig ? persistedOpenAIModel : undefined) ||
+      defaultOpenAIModel,
+  }
+  const openAIApiFormat =
+    parseOpenAICompatibleApiFormat(processEnv.OPENAI_API_FORMAT) ||
+    (usePersistedOpenAIConfig ? persistedOpenAIApiFormat : undefined)
+  if (openAIApiFormat) {
+    env.OPENAI_API_FORMAT = openAIApiFormat
+  } else {
+    delete env.OPENAI_API_FORMAT
+  }
+  const openAIAuthHeader =
+    processEnv.OPENAI_AUTH_HEADER ||
+    (usePersistedOpenAIConfig ? persistedOpenAIAuthHeader : undefined)
+  if (openAIAuthHeader) {
+    env.OPENAI_AUTH_HEADER = openAIAuthHeader
+  } else {
+    delete env.OPENAI_AUTH_HEADER
+  }
+  const openAIAuthScheme =
+    (processEnv.OPENAI_AUTH_SCHEME === 'bearer' ||
+      processEnv.OPENAI_AUTH_SCHEME === 'raw'
+      ? processEnv.OPENAI_AUTH_SCHEME
+      : undefined) ||
+    (usePersistedOpenAIConfig ? persistedOpenAIAuthScheme : undefined)
+  if (openAIAuthScheme) {
+    env.OPENAI_AUTH_SCHEME = openAIAuthScheme
+  } else {
+    delete env.OPENAI_AUTH_SCHEME
+  }
+  const openAIAuthHeaderValue =
+    sanitizeApiKey(processEnv.OPENAI_AUTH_HEADER_VALUE) ||
+    (usePersistedOpenAIConfig ? persistedOpenAIAuthHeaderValue : undefined)
+  if (openAIAuthHeaderValue) {
+    env.OPENAI_AUTH_HEADER_VALUE = openAIAuthHeaderValue
+  } else {
+    delete env.OPENAI_AUTH_HEADER_VALUE
+  }
   const openAIKey = processEnv.OPENAI_API_KEY || persistedEnv.OPENAI_API_KEY
   if (openAIKey) {
     env.OPENAI_API_KEY = openAIKey
-  } else {
-    delete env.OPENAI_API_KEY
   }
-  delete env.CODEX_API_KEY
-  delete env.CHATGPT_ACCOUNT_ID
-  delete env.CODEX_ACCOUNT_ID
-  return env
+  const customHeaders = shellCustomHeaders || persistedCustomHeaders
+  if (customHeaders) {
+    env.ANTHROPIC_CUSTOM_HEADERS = customHeaders
+  }
+
+  return buildCompatibilityProcessEnv({
+    processEnv,
+    compatibilityMode: 'openai',
+    profileEnv: env,
+  })
 }
 
 export async function buildStartupEnvFromProfile(options?: {
   persisted?: ProfileFile | null
   goal?: RecommendationGoal
   processEnv?: NodeJS.ProcessEnv
+  hasConfiguredProviderProfile?: boolean
   getOllamaChatBaseUrl?: (baseUrl?: string) => string
   resolveOllamaDefaultModel?: (goal: RecommendationGoal) => Promise<string>
   readGeminiAccessToken?: () => string | undefined
@@ -938,8 +1487,10 @@ export async function buildStartupEnvFromProfile(options?: {
   const persisted = options?.persisted ?? loadProfileFile()
 
   const profileManagedEnv = processEnv.CLAUDE_CODE_PROVIDER_PROFILE_ENV_APPLIED === '1'
+  const hasConfiguredProviderProfile =
+    options?.hasConfiguredProviderProfile ?? false
 
-  // The legacy single-profile file (~/.openclaude-profile.json) is a
+  // The single-profile file in the user config directory is a
   // first-run / fallback mechanism. The newer plural provider-profile
   // system (`/provider` presets + activeProviderProfileId in config) is
   // applied earlier in the bootstrap via applyActiveProviderProfileFromConfig
@@ -955,12 +1506,43 @@ export async function buildStartupEnvFromProfile(options?: {
     return processEnv
   }
 
+  // If startup already has a concrete provider selection and the modern
+  // plural-profile system is configured, keep trusting that selection.
+  // This prevents the legacy single-profile file from becoming a silent
+  // third precedence layer when `/provider` profiles or explicit env/flags
+  // already chose a provider before startup fallback runs.
+  if (
+    hasConfiguredProviderProfile &&
+    hasConcreteProviderSelection(processEnv)
+  ) {
+    return processEnv
+  }
+
   if (isEnvTruthy(processEnv.CLAUDE_CODE_USE_GITHUB)) {
     return processEnv
   }
 
   if (!persisted) {
-    return processEnv
+    // No saved profile — default to Codex OAuth / GPT 5.5.
+    // If Codex credentials are available (OAuth or existing), use Codex.
+    // Otherwise inject the Codex env defaults so the provider picker
+    // shows GPT 5.5 as the default model when the user lands on it.
+    const codexEnv = buildCodexProfileEnv({})
+    if (codexEnv) {
+      return buildCompatibilityProcessEnv({
+        processEnv,
+        compatibilityMode: 'openai',
+        profileEnv: codexEnv,
+      })
+    }
+    return buildCompatibilityProcessEnv({
+      processEnv,
+      compatibilityMode: 'openai',
+      profileEnv: {
+        OPENAI_BASE_URL: DEFAULT_CODEX_BASE_URL,
+        OPENAI_MODEL: 'codexplan',
+      },
+    })
   }
 
   return buildLaunchEnv({
@@ -981,10 +1563,7 @@ export function applyProfileEnvToProcessEnv(
   targetEnv: NodeJS.ProcessEnv,
   nextEnv: NodeJS.ProcessEnv,
 ): void {
-  for (const key of PROFILE_ENV_KEYS) {
-    delete targetEnv[key]
-  }
-
+  clearManagedProfileEnv(targetEnv)
   Object.assign(targetEnv, nextEnv)
 }
 
@@ -993,13 +1572,64 @@ export async function applySavedProfileToCurrentSession(options: {
   processEnv?: NodeJS.ProcessEnv
 }): Promise<string | null> {
   const processEnv = options.processEnv ?? process.env
+  const hasExplicitSelection = hasExplicitProviderSelection(processEnv)
+  const profileManagedEnv =
+    processEnv.CLAUDE_CODE_PROVIDER_PROFILE_ENV_APPLIED === '1'
+
+  if (options.profileFile.profile === 'codex' && hasExplicitSelection) {
+    const isCodexOAuthProfile =
+      options.profileFile.env.CODEX_CREDENTIAL_SOURCE === 'oauth'
+    const buildEnvSource = isCodexOAuthProfile
+      ? { ...processEnv }
+      : processEnv
+    if (isCodexOAuthProfile) {
+      delete buildEnvSource.CODEX_API_KEY
+      delete buildEnvSource.CODEX_ACCOUNT_ID
+      delete buildEnvSource.CHATGPT_ACCOUNT_ID
+    }
+    const explicitEnv = await buildLaunchEnv({
+      profile: options.profileFile.profile,
+      persisted: options.profileFile,
+      goal: normalizeRecommendationGoal(processEnv.OPENCLAUDE_PROFILE_GOAL),
+      processEnv: buildEnvSource,
+      getOllamaChatBaseUrl,
+      readGeminiAccessToken,
+    })
+    delete explicitEnv.CLAUDE_CODE_PROVIDER_PROFILE_ENV_APPLIED
+    delete explicitEnv.CLAUDE_CODE_PROVIDER_PROFILE_ENV_APPLIED_ID
+    const validationEnv = isCodexOAuthProfile
+      ? { ...explicitEnv, CODEX_API_KEY: 'codex-oauth-token-for-validation' }
+      : explicitEnv
+    const validationError = await getProviderValidationError(validationEnv)
+
+    if (profileManagedEnv) {
+      delete processEnv.CLAUDE_CODE_PROVIDER_PROFILE_ENV_APPLIED
+      delete processEnv.CLAUDE_CODE_PROVIDER_PROFILE_ENV_APPLIED_ID
+      applyProfileEnvToProcessEnv(processEnv, explicitEnv)
+      return validationError
+    }
+
+    return (
+      validationError ??
+      'current session already has an explicit provider selection'
+    )
+  }
+
   const baseEnv = { ...processEnv }
   const isCodexOAuthProfile =
     options.profileFile.profile === 'codex' &&
     options.profileFile.env.CODEX_CREDENTIAL_SOURCE === 'oauth'
 
+  delete baseEnv.CLAUDE_CODE_USE_OPENAI
+  delete baseEnv.CLAUDE_CODE_USE_GITHUB
+  delete baseEnv.CLAUDE_CODE_USE_GEMINI
+  delete baseEnv.CLAUDE_CODE_USE_MISTRAL
+  delete baseEnv.CLAUDE_CODE_USE_BEDROCK
+  delete baseEnv.CLAUDE_CODE_USE_VERTEX
+  delete baseEnv.CLAUDE_CODE_USE_FOUNDRY
   delete baseEnv.CLAUDE_CODE_PROVIDER_PROFILE_ENV_APPLIED
   delete baseEnv.CLAUDE_CODE_PROVIDER_PROFILE_ENV_APPLIED_ID
+
   if (isCodexOAuthProfile) {
     delete baseEnv.CODEX_API_KEY
     delete baseEnv.CODEX_ACCOUNT_ID
@@ -1014,7 +1644,10 @@ export async function applySavedProfileToCurrentSession(options: {
     getOllamaChatBaseUrl,
     readGeminiAccessToken,
   })
-  const validationError = await getProviderValidationError(nextEnv)
+  const validationEnv = isCodexOAuthProfile
+    ? { ...nextEnv, CODEX_API_KEY: 'codex-oauth-token-for-validation' }
+    : nextEnv
+  const validationError = await getProviderValidationError(validationEnv)
   if (validationError) {
     return validationError
   }

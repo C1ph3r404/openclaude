@@ -7,7 +7,6 @@ import { shouldUseSessionMemoryCompaction } from '../../services/compact/session
 import type { Message } from '../../types/message.js';
 import { isEnvTruthy } from '../../utils/envUtils.js';
 import { isCompactBoundaryMessage } from '../../utils/messages.js';
-import { logOTelEvent } from '../../utils/telemetry/events.js';
 import { useSurveyState } from './useSurveyState.js';
 import type { FeedbackSurveyResponse } from './utils.js';
 const HIDE_THANKS_AFTER_MS = 3000;
@@ -183,12 +182,6 @@ function _temp2(appearanceId_0, selected) {
     response: selected as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
     session_memory_compaction_enabled: smCompactionEnabled_0 as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   });
-  logOTelEvent("feedback_survey", {
-    event_type: "responded",
-    appearance_id: appearanceId_0,
-    response: selected,
-    survey_type: "post_compact"
-  });
 }
 function _temp(appearanceId) {
   const smCompactionEnabled = shouldUseSessionMemoryCompaction();
@@ -196,10 +189,5 @@ function _temp(appearanceId) {
     event_type: "appeared" as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
     appearance_id: appearanceId as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
     session_memory_compaction_enabled: smCompactionEnabled as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
-  });
-  logOTelEvent("feedback_survey", {
-    event_type: "appeared",
-    appearance_id: appearanceId,
-    survey_type: "post_compact"
   });
 }

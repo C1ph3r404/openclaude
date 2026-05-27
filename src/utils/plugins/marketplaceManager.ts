@@ -53,6 +53,7 @@ import {
   getAddDirExtraMarketplaces,
 } from './addDirPluginSettings.js'
 import { markPluginVersionOrphaned } from './cacheUtils.js'
+import { buildGitChildEnv } from './gitEnv.js'
 import { classifyFetchError, logPluginFetch } from './fetchTelemetry.js'
 import { removeAllPluginsForMarketplace } from './installedPluginsManager.js'
 import {
@@ -506,11 +507,6 @@ function seedDirFor(installLocation: string): string | undefined {
  * Provides helpful error messages for common failure scenarios.
  * If a ref is specified, fetches and checks out that specific branch or tag.
  */
-// Environment variables to prevent git from prompting for credentials
-const GIT_NO_PROMPT_ENV = {
-  GIT_TERMINAL_PROMPT: '0', // Prevent terminal credential prompts
-  GIT_ASKPASS: '', // Disable askpass GUI programs
-}
 
 const DEFAULT_PLUGIN_GIT_TIMEOUT_MS = 120 * 1000
 
@@ -531,7 +527,7 @@ export async function gitPull(
   options?: { disableCredentialHelper?: boolean; sparsePaths?: string[] },
 ): Promise<{ code: number; stderr: string }> {
   logForDebugging(`git pull: cwd=${cwd} ref=${ref ?? 'default'}`)
-  const env = { ...process.env, ...GIT_NO_PROMPT_ENV }
+  const env = buildGitChildEnv()
   const baseArgs = ['-c', 'core.hooksPath=/dev/null']
   const credentialArgs = options?.disableCredentialHelper
     ? ['-c', 'credential.helper=']
@@ -844,7 +840,7 @@ export async function gitClone(
   const result = await execFileNoThrowWithCwd(gitExe(), args, {
     timeout: timeoutMs,
     stdin: 'ignore',
-    env: { ...process.env, ...GIT_NO_PROMPT_ENV },
+    env: buildGitChildEnv(),
   })
 
   // Scrub credentials from execa's error/stderr fields before any logging or
@@ -870,7 +866,7 @@ export async function gitClone(
           cwd: targetPath,
           timeout: timeoutMs,
           stdin: 'ignore',
-          env: { ...process.env, ...GIT_NO_PROMPT_ENV },
+          env: buildGitChildEnv(),
         },
       )
       if (sparseResult.code !== 0) {
@@ -889,7 +885,7 @@ export async function gitClone(
           cwd: targetPath,
           timeout: timeoutMs,
           stdin: 'ignore',
-          env: { ...process.env, ...GIT_NO_PROMPT_ENV },
+          env: buildGitChildEnv(),
         },
       )
       if (checkoutResult.code !== 0) {
@@ -1040,7 +1036,7 @@ export async function reconcileSparseCheckout(
   cwd: string,
   sparsePaths: string[] | undefined,
 ): Promise<{ code: number; stderr: string }> {
-  const env = { ...process.env, ...GIT_NO_PROMPT_ENV }
+  const env = buildGitChildEnv()
 
   if (sparsePaths && sparsePaths.length > 0) {
     return execFileNoThrowWithCwd(
@@ -1871,8 +1867,8 @@ export async function addMarketplaceSource(
     if (seedDir) {
       throw new Error(
         `Marketplace '${marketplace.name}' is seed-managed (${seedDir}). ` +
-          `To use a different source, ask your admin to update the seed, ` +
-          `or use a different marketplace name.`,
+        `To use a different source, ask your admin to update the seed, ` +
+        `or use a different marketplace name.`,
       )
     }
     logForDebugging(
@@ -1907,8 +1903,8 @@ export async function addMarketplaceSource(
       } else {
         logForDebugging(
           `Skipping cleanup of old installLocation (${oldEntry.installLocation}) — ` +
-            `outside ${cacheDir}. The path is corrupted; leaving it alone and ` +
-            `overwriting the config entry.`,
+          `outside ${cacheDir}. The path is corrupted; leaving it alone and ` +
+          `overwriting the config entry.`,
           { level: 'warn' },
         )
       }
@@ -1954,8 +1950,8 @@ export async function removeMarketplaceSource(name: string): Promise<void> {
   if (seedDir) {
     throw new Error(
       `Marketplace '${name}' is registered from the read-only seed directory ` +
-        `(${seedDir}) and will be re-registered on next startup. ` +
-        `To stop using its plugins: claude plugin disable <plugin>@${name}`,
+      `(${seedDir}) and will be re-registered on next startup. ` +
+      `To stop using its plugins: claude plugin disable <plugin>@${name}`,
     )
   }
 
@@ -2145,9 +2141,9 @@ export const getMarketplace = memoize(
     ) {
       throw new Error(
         `Marketplace "${name}" has a relative source path (${entry.source.path}) ` +
-          `in known_marketplaces.json — this is stale state from an older ` +
-          `Claude Code version. Run 'claude marketplace remove ${name}' and ` +
-          `re-add it from the original project directory.`,
+        `in known_marketplaces.json — this is stale state from an older ` +
+        `Claude Code version. Run 'claude marketplace remove ${name}' and ` +
+        `re-add it from the original project directory.`,
       )
     }
 
@@ -2167,7 +2163,7 @@ export const getMarketplace = memoize(
     // Cache doesn't exist or is invalid, fetch from source
     let marketplace: PluginMarketplace
     try {
-      ;({ marketplace } = await loadAndCacheMarketplace(entry.source))
+      ; ({ marketplace } = await loadAndCacheMarketplace(entry.source))
     } catch (error) {
       throw new Error(
         `Failed to load marketplace "${name}" from source (${entry.source.source}): ${errorMessage(error)}`,
@@ -2406,7 +2402,7 @@ export async function refreshMarketplace(
     if (seedDir) {
       throw new Error(
         `Marketplace '${name}' is seed-managed (${seedDir}) and its content is ` +
-          `controlled by the seed image. To update: ask your admin to update the seed.`,
+        `controlled by the seed image. To update: ask your admin to update the seed.`,
       )
     }
 
@@ -2422,10 +2418,10 @@ export async function refreshMarketplace(
       if (resolvedLoc !== cacheDir && !resolvedLoc.startsWith(cacheDir + sep)) {
         throw new Error(
           `Marketplace '${name}' has a corrupted installLocation ` +
-            `(${installLocation}) — expected a path inside ${cacheDir}. ` +
-            `This can happen after cross-platform path writes or manual edits ` +
-            `to known_marketplaces.json. ` +
-            `Run: claude plugin marketplace remove "${name}" and re-add it.`,
+          `(${installLocation}) — expected a path inside ${cacheDir}. ` +
+          `This can happen after cross-platform path writes or manual edits ` +
+          `to known_marketplaces.json. ` +
+          `Run: claude plugin marketplace remove "${name}" and re-add it.`,
         )
       }
     }
@@ -2543,9 +2539,9 @@ export async function refreshMarketplace(
             : `This marketplace may have been deprecated or moved to a new location.`
         throw new Error(
           `The marketplace.json file is no longer present in this repository.\n\n` +
-            `${reason}\n` +
-            `Source: ${sourceDisplay}\n\n` +
-            `You can remove this marketplace with: claude plugin marketplace remove "${name}"`,
+          `${reason}\n` +
+          `Source: ${sourceDisplay}\n\n` +
+          `You can remove this marketplace with: claude plugin marketplace remove "${name}"`,
         )
       }
     } else if (source.source === 'url') {
@@ -2609,8 +2605,8 @@ export async function setMarketplaceAutoUpdate(
   if (seedDir) {
     throw new Error(
       `Marketplace '${name}' is seed-managed (${seedDir}) and ` +
-        `auto-update is always disabled for seed content. ` +
-        `To update: ask your admin to update the seed.`,
+      `auto-update is always disabled for seed content. ` +
+      `To update: ask your admin to update the seed.`,
     )
   }
 

@@ -1,4 +1,5 @@
 import { isBareMode } from './envUtils.js'
+import { createCombinedAbortSignal } from './combinedAbortSignal.js'
 import { getSecureStorage } from './secureStorage/index.js'
 import {
   asTrimmedString,
@@ -32,9 +33,9 @@ type CodexTokenRefreshResponse = {
 
 let inFlightCodexRefresh:
   | Promise<{
-      refreshed: boolean
-      credentials?: CodexCredentialBlob
-    }>
+    refreshed: boolean
+    credentials?: CodexCredentialBlob
+  }>
   | null = null
 let inMemoryLastRefreshFailureAt: number | null = null
 
@@ -72,12 +73,12 @@ function normalizeCodexCredentialBlob(
 
   const lastRefreshAt =
     typeof record.lastRefreshAt === 'number' &&
-    Number.isFinite(record.lastRefreshAt)
+      Number.isFinite(record.lastRefreshAt)
       ? record.lastRefreshAt
       : undefined
   const lastRefreshFailureAt =
     typeof record.lastRefreshFailureAt === 'number' &&
-    Number.isFinite(record.lastRefreshFailureAt)
+      Number.isFinite(record.lastRefreshFailureAt)
       ? record.lastRefreshFailureAt
       : undefined
 
@@ -310,21 +311,29 @@ export async function refreshCodexAccessTokenIfNeeded(options?: {
         refresh_token: current.refreshToken,
       })
 
-      const response = await fetch(CODEX_REFRESH_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body,
-        signal: AbortSignal.timeout(15_000),
+      const { signal, cleanup } = createCombinedAbortSignal(undefined, {
+        timeoutMs: 15_000,
       })
+      let payload: CodexTokenRefreshResponse
+      try {
+        const response = await fetch(CODEX_REFRESH_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body,
+          signal,
+        })
 
-      if (!response.ok) {
-        const bodyText = await response.text().catch(() => '')
-        throw new Error(getRefreshErrorMessage(response.status, bodyText))
+        if (!response.ok) {
+          const bodyText = await response.text().catch(() => '')
+          throw new Error(getRefreshErrorMessage(response.status, bodyText))
+        }
+
+        payload = (await response.json()) as CodexTokenRefreshResponse
+      } finally {
+        cleanup()
       }
-
-      const payload = (await response.json()) as CodexTokenRefreshResponse
       const accessToken = asTrimmedString(payload.access_token)
       if (!accessToken) {
         throw new Error(
@@ -355,7 +364,7 @@ export async function refreshCodexAccessTokenIfNeeded(options?: {
       if (!saveResult.success) {
         throw new Error(
           saveResult.warning ??
-            'Codex token refresh succeeded but credentials could not be saved.',
+          'Codex token refresh succeeded but credentials could not be saved.',
         )
       }
 

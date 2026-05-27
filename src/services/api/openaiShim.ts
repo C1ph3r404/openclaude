@@ -11,6 +11,10 @@
  * Environment variables:
  *   CLAUDE_CODE_USE_OPENAI=1          — enable this provider
  *   OPENAI_API_KEY=sk-...             — API key (optional for local models)
+ *   OPENAI_AUTH_HEADER=api-key        — optional custom auth header name
+ *   OPENAI_AUTH_HEADER_VALUE=...      — optional custom auth header value
+ *   OPENAI_AUTH_SCHEME=bearer|raw     — auth scheme for Authorization/custom header handling
+ *   OPENAI_API_FORMAT=chat_completions|responses — request format for compatible APIs
  *   OPENAI_BASE_URL=http://...        — base URL (default: https://api.openai.com/v1)
  *   OPENAI_MODEL=gpt-4o              — default model override
  *   CODEX_API_KEY / ~/.codex/auth.json — Codex auth for codexplan/codexspark
@@ -31,6 +35,8 @@ import { isBareMode, isEnvTruthy } from '../../utils/envUtils.js'
 import { resolveGeminiCredential } from '../../utils/geminiAuth.js'
 import { hydrateGeminiAccessTokenFromSecureStorage } from '../../utils/geminiCredentials.js'
 import { hydrateGithubModelsTokenFromSecureStorage } from '../../utils/githubModelsCredentials.js'
+import { resolveOpenAIShimRuntimeContext } from '../../integrations/runtimeMetadata.js'
+import { resolveRouteCredentialValue } from '../../integrations/routeMetadata.js'
 import {
   createThinkTagFilter,
   stripThinkTags,
@@ -50,12 +56,15 @@ import { buildAnthropicUsageFromRawUsage } from './cacheMetrics.js'
 import { compressToolHistory } from './compressToolHistory.js'
 import { fetchWithProxyRetry } from './fetchWithProxyRetry.js'
 import {
+  getLocalFastPathConfig,
   getLocalProviderRetryBaseUrls,
   getGithubEndpointType,
   isLocalProviderUrl,
   resolveRuntimeCodexCredentials,
   resolveProviderRequest,
   shouldAttemptLocalToollessRetry,
+  GITHUB_COPILOT_BASE_URL,
+  type LocalFastPathConfig,
 } from './providerConfig.js'
 import {
   buildOpenAICompatibilityErrorMessage,
@@ -64,15 +73,22 @@ import {
 } from './openaiErrorClassification.js'
 import { sanitizeSchemaForOpenAICompat } from '../../utils/schemaSanitizer.js'
 import { redactSecretValueForDisplay } from '../../utils/providerProfile.js'
+import { shouldRedactUrlQueryParam } from '../../utils/urlRedaction.js'
 import {
   normalizeToolArguments,
   hasToolFieldMapping,
 } from './toolArgumentNormalization.js'
 import { logApiCallStart, logApiCallEnd } from '../../utils/requestLogging.js'
-import { createStreamState, processStreamChunk, getStreamStats } from '../../utils/streamingOptimizer.js'
+import {
+  createStreamState,
+  processStreamChunk,
+  getStreamStats,
+} from '../../utils/streamingOptimizer.js'
+import { stableStringifyJson } from '../../utils/stableStringify.js'
 
 type SecretValueSource = Partial<{
   OPENAI_API_KEY: string
+  OPENAI_AUTH_HEADER_VALUE: string
   CODEX_API_KEY: string
   GEMINI_API_KEY: string
   GOOGLE_API_KEY: string
@@ -80,20 +96,10 @@ type SecretValueSource = Partial<{
   MISTRAL_API_KEY: string
 }>
 
-const GITHUB_COPILOT_BASE = 'https://api.githubcopilot.com'
 const GITHUB_429_MAX_RETRIES = 3
 const GITHUB_429_BASE_DELAY_SEC = 1
 const GITHUB_429_MAX_DELAY_SEC = 32
 const GEMINI_API_HOST = 'generativelanguage.googleapis.com'
-const MOONSHOT_API_HOSTS = new Set([
-  'api.moonshot.ai',
-  'api.moonshot.cn',
-])
-const KIMI_CODE_API_HOST = 'api.kimi.com'
-const DEEPSEEK_API_HOSTS = new Set([
-  'api.deepseek.com',
-])
-
 const COPILOT_HEADERS: Record<string, string> = {
   'User-Agent': 'GitHubCopilotChat/0.26.7',
   'Editor-Version': 'vscode/1.99.3',
@@ -101,25 +107,8 @@ const COPILOT_HEADERS: Record<string, string> = {
   'Copilot-Integration-Id': 'vscode-chat',
 }
 
-const SENSITIVE_URL_QUERY_PARAM_NAMES = [
-  'api_key',
-  'key',
-  'token',
-  'access_token',
-  'refresh_token',
-  'signature',
-  'sig',
-  'secret',
-  'password',
-  'authorization',
-]
-
 function isGithubModelsMode(): boolean {
   return isEnvTruthy(process.env.CLAUDE_CODE_USE_GITHUB)
-}
-
-function isMistralMode(): boolean {
-  return isEnvTruthy(process.env.CLAUDE_CODE_USE_MISTRAL)
 }
 
 function filterAnthropicHeaders(
@@ -158,25 +147,12 @@ function hasGeminiApiHost(baseUrl: string | undefined): boolean {
   }
 }
 
-function isMoonshotCompatibleBaseUrl(baseUrl: string | undefined): boolean {
+function hasCerebrasApiHost(baseUrl: string | undefined): boolean {
   if (!baseUrl) return false
-  try {
-    const parsed = new URL(baseUrl)
-    const hostname = parsed.hostname.toLowerCase()
-    return (
-      MOONSHOT_API_HOSTS.has(hostname) ||
-      (hostname === KIMI_CODE_API_HOST &&
-        parsed.pathname.toLowerCase().startsWith('/coding'))
-    )
-  } catch {
-    return false
-  }
-}
 
-function isDeepSeekBaseUrl(baseUrl: string | undefined): boolean {
-  if (!baseUrl) return false
   try {
-    return DEEPSEEK_API_HOSTS.has(new URL(baseUrl).hostname.toLowerCase())
+    const host = new URL(baseUrl).hostname.toLowerCase()
+    return host === 'api.cerebras.ai' || host.endsWith('.cerebras.ai')
   } catch {
     return false
   }
@@ -191,11 +167,6 @@ function normalizeDeepSeekReasoningEffort(
 function formatRetryAfterHint(response: Response): string {
   const ra = response.headers.get('retry-after')
   return ra ? ` (Retry-After: ${ra})` : ''
-}
-
-function shouldRedactUrlQueryParam(name: string): boolean {
-  const lower = name.toLowerCase()
-  return SENSITIVE_URL_QUERY_PARAM_NAMES.some(token => lower.includes(token))
 }
 
 function redactUrlForDiagnostics(url: string): string {
@@ -219,6 +190,10 @@ function redactUrlForDiagnostics(url: string): string {
   } catch {
     return redactSecretValueForDisplay(url, process.env as SecretValueSource) ?? url
   }
+}
+
+function redactUrlsInMessage(message: string): string {
+  return message.replace(/https?:\/\/\S+/g, match => redactUrlForDiagnostics(match))
 }
 
 function sleepMs(ms: number): Promise<void> {
@@ -274,6 +249,11 @@ function convertSystemPrompt(
       .map((block: { type?: string; text?: string }) =>
         block.type === 'text' ? block.text ?? '' : '',
       )
+      // Drop the Anthropic billing/attribution block — it's only meaningful to
+      // Anthropic's `_parse_cc_header` and is dead weight (plus a churning
+      // per-build fingerprint that busts prefix KV cache) for OpenAI-compat
+      // providers like local Ollama / llama.cpp / Codex pass-throughs.
+      .filter(text => !text.startsWith('x-anthropic-billing-header'))
       .join('\n\n')
   }
   return String(system)
@@ -412,6 +392,50 @@ function isGeminiMode(): boolean {
   )
 }
 
+function hydrateOpenAIShimCompatibilityEnv(
+  processEnv: NodeJS.ProcessEnv = process.env,
+): void {
+  // Provider selection, base URL defaults, and model defaults now flow
+  // through resolveProviderRequest(). The shim still needs a few legacy
+  // credential aliases because downstream auth/header paths read OPENAI_*.
+  if (isEnvTruthy(processEnv.CLAUDE_CODE_USE_GEMINI)) {
+    const geminiApiKey =
+      processEnv.GEMINI_API_KEY ?? processEnv.GOOGLE_API_KEY
+    if (geminiApiKey && !processEnv.OPENAI_API_KEY) {
+      processEnv.OPENAI_API_KEY = geminiApiKey
+    }
+    return
+  }
+
+  if (isEnvTruthy(processEnv.CLAUDE_CODE_USE_MISTRAL)) {
+    if (processEnv.MISTRAL_API_KEY && !processEnv.OPENAI_API_KEY) {
+      processEnv.OPENAI_API_KEY = processEnv.MISTRAL_API_KEY
+    }
+    return
+  }
+
+  if (isEnvTruthy(processEnv.CLAUDE_CODE_USE_GITHUB)) {
+    processEnv.OPENAI_API_KEY ??=
+      processEnv.GITHUB_TOKEN ?? processEnv.GH_TOKEN ?? ''
+    return
+  }
+
+  if (processEnv.BANKR_BASE_URL && !processEnv.OPENAI_BASE_URL) {
+    processEnv.OPENAI_BASE_URL = processEnv.BANKR_BASE_URL
+  }
+  if (processEnv.BANKR_MODEL && !processEnv.OPENAI_MODEL) {
+    processEnv.OPENAI_MODEL = processEnv.BANKR_MODEL
+  }
+
+  const routeCredential = resolveRouteCredentialValue({
+    processEnv,
+    baseUrl: processEnv.OPENAI_BASE_URL ?? processEnv.OPENAI_API_BASE,
+  })
+  if (routeCredential && !processEnv.OPENAI_API_KEY) {
+    processEnv.OPENAI_API_KEY = routeCredential
+  }
+}
+
 function convertMessages(
   messages: Array<{
     role: string
@@ -419,9 +443,13 @@ function convertMessages(
     content?: unknown
   }>,
   system: unknown,
-  options?: { preserveReasoningContent?: boolean },
+  options?: {
+    preserveReasoningContent?: boolean
+    reasoningContentFallback?: '' | 'omit'
+  },
 ): OpenAIMessage[] {
   const preserveReasoningContent = options?.preserveReasoningContent === true
+  const reasoningContentFallback = options?.reasoningContentFallback
   const result: OpenAIMessage[] = []
   const knownToolCallIds = new Set<string>()
 
@@ -536,6 +564,11 @@ function convertMessages(
           const thinkingText = (thinkingBlock as { thinking?: string } | undefined)?.thinking
           if (typeof thinkingText === 'string' && thinkingText.trim().length > 0) {
             assistantMsg.reasoning_content = thinkingText
+          } else if (
+            toolUses.length > 0 &&
+            reasoningContentFallback === ''
+          ) {
+            assistantMsg.reasoning_content = ''
           }
         }
 
@@ -771,8 +804,13 @@ function normalizeSchemaForOpenAI(
 
 function convertTools(
   tools: Array<{ name: string; description?: string; input_schema?: Record<string, unknown> }>,
+  options: { skipStrict?: boolean } = {},
 ): OpenAITool[] {
   const isGemini = isGeminiMode()
+  const strict =
+    !isGemini &&
+    !isEnvTruthy(process.env.OPENCLAUDE_DISABLE_STRICT_TOOLS) &&
+    !options.skipStrict
 
   return tools
     .filter(t => t.name !== 'ToolSearchTool') // Not relevant for OpenAI
@@ -795,10 +833,7 @@ function convertTools(
         function: {
           name: t.name,
           description: t.description ?? '',
-          parameters: normalizeSchemaForOpenAI(
-            schema,
-            !isGemini && !isEnvTruthy(process.env.OPENCLAUDE_DISABLE_STRICT_TOOLS),
-          ),
+          parameters: normalizeSchemaForOpenAI(schema, strict),
         },
       }
     })
@@ -1020,6 +1055,32 @@ async function* openaiStreamToAnthropic(
           continue
         }
 
+        // In-stream error event. Used by OpenAI when a stream fails after
+        // headers have been sent, and by intermediaries (e.g. gateways) that
+        // want to signal a structured failure without dropping the TCP
+        // connection. Surface it as an APIError so callers see a clean
+        // message instead of "stream ended without [DONE]".
+        const inStreamError = (chunk as unknown as { error?: { message?: string; type?: string; code?: string } }).error
+        if (inStreamError && typeof inStreamError === 'object') {
+          const message =
+            typeof inStreamError.message === 'string'
+              ? inStreamError.message
+              : 'Provider returned an in-stream error'
+          const errorPayload = {
+            error: {
+              message,
+              type: inStreamError.type ?? 'api_error',
+              code: inStreamError.code ?? null,
+            },
+          }
+          throw APIError.generate(
+            (response.status ?? 200) as number,
+            errorPayload,
+            message,
+            response.headers as unknown as Headers,
+          )
+        }
+
         const chunkUsage = convertChunkUsage(chunk.usage)
 
         for (const choice of chunk.choices ?? []) {
@@ -1099,191 +1160,401 @@ async function* openaiStreamToAnthropic(
                   normalizeAtStop,
                 })
 
-                yield {
-                  type: 'content_block_start',
-                  index: toolBlockIndex,
-                  content_block: {
-                    type: 'tool_use',
-                    id: tc.id,
-                    name: tc.function.name,
-                    input: {},
-                    ...(tc.extra_content ? { extra_content: tc.extra_content } : {}),
-                    // Extract Gemini signature from extra_content
-                    ...((tc.extra_content?.google as any)?.thought_signature
-                      ? {
-                        signature: (tc.extra_content.google as any)
-                          .thought_signature,
-                      }
-                      : {}),
-                  },
-                }
-                contentBlockIndex++
-
-                // Emit any initial arguments
-                if (tc.function.arguments && !normalizeAtStop) {
+                // Reasoning models (e.g. GLM-5, DeepSeek) may stream chain-of-thought
+                // in `reasoning_content` before the actual reply appears in `content`.
+                // Emit reasoning as a thinking block and content as a text block.
+                if (delta.reasoning_content != null && delta.reasoning_content !== '') {
+                  if (!hasEmittedThinkingStart) {
+                    yield {
+                      type: 'content_block_start',
+                      index: contentBlockIndex,
+                      content_block: { type: 'thinking', thinking: '' },
+                    }
+                    hasEmittedThinkingStart = true
+                  }
                   yield {
                     type: 'content_block_delta',
-                    index: toolBlockIndex,
-                    delta: {
-                      type: 'input_json_delta',
-                      partial_json: tc.function.arguments,
-                    },
+                    index: contentBlockIndex,
+                    delta: { type: 'thinking_delta', thinking: delta.reasoning_content },
                   }
                 }
-              } else if (tc.function?.arguments) {
-                // Continuation of existing tool call
-                const active = activeToolCalls.get(tc.index)
-                if (active) {
-                  if (tc.function.arguments) {
-                    active.jsonBuffer += tc.function.arguments
+
+                // Text content — use != null to distinguish absent field from empty string,
+                // some providers send "" as first delta to signal streaming start
+                if (delta.content != null && delta.content !== '') {
+                  // Close thinking block if transitioning from reasoning to content
+                  if (hasEmittedThinkingStart && !hasClosedThinking) {
+                    yield { type: 'content_block_stop', index: contentBlockIndex }
+                    contentBlockIndex++
+                    hasClosedThinking = true
+                  }
+                  if (!hasEmittedContentStart) {
+                    yield {
+                      type: 'content_block_start',
+                      index: contentBlockIndex,
+                      content_block: { type: 'text', text: '' },
+                    }
+                    hasEmittedContentStart = true
                   }
 
-                  if (active.normalizeAtStop) {
+                  const visible = thinkFilter.feed(delta.content)
+                  if (visible) {
+                    yield {
+                      type: 'content_block_delta',
+                      index: contentBlockIndex,
+                      delta: { type: 'text_delta', text: visible },
+                    }
+                  }
+                  processStreamChunk(streamState, delta.content)
+                }
+
+                // Tool calls
+                if (delta.tool_calls) {
+                  for (const tc of delta.tool_calls) {
+                    if (tc.id && tc.function?.name) {
+                      // New tool call starting — close any open thinking block first
+                      if (hasEmittedThinkingStart && !hasClosedThinking) {
+                        yield { type: 'content_block_stop', index: contentBlockIndex }
+                        contentBlockIndex++
+                        hasClosedThinking = true
+                      }
+                      if (hasEmittedContentStart) {
+                        yield* closeActiveContentBlock()
+                      }
+
+                      const toolBlockIndex = contentBlockIndex
+                      const initialArguments = tc.function.arguments ?? ''
+                      const normalizeAtStop = hasToolFieldMapping(tc.function.name)
+                      processStreamChunk(streamState, tc.function.arguments ?? '')
+                      activeToolCalls.set(tc.index, {
+                        id: tc.id,
+                        name: tc.function.name,
+                        index: toolBlockIndex,
+                        jsonBuffer: initialArguments,
+                        normalizeAtStop,
+                      })
+
+                      yield {
+                        type: 'content_block_start',
+                        index: toolBlockIndex,
+                        content_block: {
+                          type: 'tool_use',
+                          id: tc.id,
+                          name: tc.function.name,
+                          input: {},
+                          ...(tc.extra_content ? { extra_content: tc.extra_content } : {}),
+                          // Extract Gemini signature from extra_content
+                          ...((tc.extra_content?.google as any)?.thought_signature
+                            ? {
+                              signature: (tc.extra_content?.google as any)?.thought_signature,
+                            }
+                            : {}),
+                        },
+                      }
+                      contentBlockIndex++
+
+                      // Emit any initial arguments
+                      if (tc.function.arguments && !normalizeAtStop) {
+                        yield {
+                          type: 'content_block_delta',
+                          index: toolBlockIndex,
+                          delta: {
+                            type: 'input_json_delta',
+                            partial_json: tc.function.arguments,
+                          },
+                        }
+                      }
+                    } else if (tc.function?.arguments) {
+                      // Continuation of existing tool call
+                      const active = activeToolCalls.get(tc.index)
+                      if (active) {
+                        if (tc.function.arguments) {
+                          active.jsonBuffer += tc.function.arguments
+                        }
+
+                        if (active.normalizeAtStop) {
+                          continue
+                        }
+
+                        yield {
+                          type: 'content_block_delta',
+                          index: active.index,
+                          delta: {
+                            type: 'input_json_delta',
+                            partial_json: tc.function.arguments,
+                          },
+                        }
+                      }
+                    }
+                  }
+                }
+
+                // Finish — guard ensures we only process finish_reason once even if
+                // multiple chunks arrive with finish_reason set (some providers do this)
+                if (choice.finish_reason && !hasProcessedFinishReason) {
+                  hasProcessedFinishReason = true
+
+                  // Close any open thinking block that wasn't closed by content transition
+                  if (hasEmittedThinkingStart && !hasClosedThinking) {
+                    yield { type: 'content_block_stop', index: contentBlockIndex }
+                    contentBlockIndex++
+                    hasClosedThinking = true
+                  }
+                  // Close any open content blocks
+                  if (hasEmittedContentStart) {
+                    yield* closeActiveContentBlock()
+                  }
+                  // Close active tool calls
+                  for (const [, tc] of activeToolCalls) {
+                    if (tc.normalizeAtStop) {
+                      let partialJson: string
+                      if (choice.finish_reason === 'length') {
+                        // Truncated by max tokens — preserve raw buffer to avoid
+                        // turning an incomplete tool call into an executable command
+                        partialJson = tc.jsonBuffer
+                      } else {
+                        const repairedStructuredJson = repairPossiblyTruncatedObjectJson(
+                          tc.jsonBuffer,
+                        )
+                        if (repairedStructuredJson) {
+                          partialJson = repairedStructuredJson
+                        } else {
+                          partialJson = JSON.stringify(
+                            normalizeToolArguments(tc.name, tc.jsonBuffer),
+                          )
+                        }
+                      }
+
+                      yield {
+                        type: 'content_block_delta',
+                        index: tc.index,
+                        delta: {
+                          type: 'input_json_delta',
+                          partial_json: partialJson,
+                        },
+                      }
+                      yield { type: 'content_block_stop', index: tc.index }
+                      continue
+                    }
+
+                    let suffixToAdd = ''
+                    if (tc.jsonBuffer) {
+                      try {
+                        JSON.parse(tc.jsonBuffer)
+                      } catch {
+                        const str = tc.jsonBuffer.trimEnd()
+                        for (const combo of JSON_REPAIR_SUFFIXES) {
+                          try {
+                            JSON.parse(str + combo)
+                            suffixToAdd = combo
+                            break
+                          } catch { }
+                        }
+                      }
+                    }
+
+                    if (suffixToAdd) {
+                      yield {
+                        type: 'content_block_delta',
+                        index: tc.index,
+                        delta: {
+                          type: 'input_json_delta',
+                          partial_json: suffixToAdd,
+                        },
+                      }
+                    }
+
+                    yield { type: 'content_block_stop', index: tc.index }
+                  }
+
+                  const stopReason =
+                    choice.finish_reason === 'tool_calls'
+                      ? 'tool_use'
+                      : choice.finish_reason === 'length'
+                        ? 'max_tokens'
+                        : 'end_turn'
+                  if (choice.finish_reason === 'content_filter' || choice.finish_reason === 'safety') {
+                    // Gemini/Azure content safety filter blocked the response.
+                    // Emit a visible text block so the user knows why output was truncated.
+                    if (!hasEmittedContentStart) {
+                      yield {
+                        type: 'content_block_start',
+                        index: contentBlockIndex,
+                        content_block: { type: 'text', text: '' },
+                      }
+                      hasEmittedContentStart = true
+                    }
+                    yield {
+                      type: 'content_block_delta',
+                      index: contentBlockIndex,
+                      delta: { type: 'text_delta', text: '\n\n[Content blocked by provider safety filter]' },
+                    }
+                  }
+                  lastStopReason = stopReason
+
+                  yield {
+                    type: 'message_delta',
+                    delta: { stop_reason: stopReason, stop_sequence: null },
+                    ...(chunkUsage ? { usage: chunkUsage } : {}),
+                  }
+                  if (chunkUsage) {
+                    hasEmittedFinalUsage = true
+                  }
+                }
+              }
+
+              // Finish — guard ensures we only process finish_reason once even if
+              // multiple chunks arrive with finish_reason set (some providers do this)
+              if (choice.finish_reason && !hasProcessedFinishReason) {
+                hasProcessedFinishReason = true
+
+                // Close any open thinking block that wasn't closed by content transition
+                if (hasEmittedThinkingStart && !hasClosedThinking) {
+                  yield { type: 'content_block_stop', index: contentBlockIndex }
+                  contentBlockIndex++
+                  hasClosedThinking = true
+                }
+                // Close any open content blocks
+                if (hasEmittedContentStart) {
+                  yield* closeActiveContentBlock()
+                }
+                // Close active tool calls
+                for (const [, tc] of activeToolCalls) {
+                  if (tc.normalizeAtStop) {
+                    let partialJson: string
+                    if (choice.finish_reason === 'length') {
+                      // Truncated by max tokens — preserve raw buffer to avoid
+                      // turning an incomplete tool call into an executable command
+                      partialJson = tc.jsonBuffer
+                    } else {
+                      const repairedStructuredJson = repairPossiblyTruncatedObjectJson(
+                        tc.jsonBuffer,
+                      )
+                      if (repairedStructuredJson) {
+                        partialJson = repairedStructuredJson
+                      } else {
+                        partialJson = JSON.stringify(
+                          normalizeToolArguments(tc.name, tc.jsonBuffer),
+                        )
+                      }
+                    }
+
+                    yield {
+                      type: 'content_block_delta',
+                      index: tc.index,
+                      delta: {
+                        type: 'input_json_delta',
+                        partial_json: partialJson,
+                      },
+                    }
+                    yield { type: 'content_block_stop', index: tc.index }
                     continue
                   }
 
+                  let suffixToAdd = ''
+                  if (tc.jsonBuffer) {
+                    try {
+                      JSON.parse(tc.jsonBuffer)
+                    } catch {
+                      const str = tc.jsonBuffer.trimEnd()
+                      for (const combo of JSON_REPAIR_SUFFIXES) {
+                        try {
+                          JSON.parse(str + combo)
+                          suffixToAdd = combo
+                          break
+                        } catch { }
+                      }
+                    }
+                  }
+
+                  if (suffixToAdd) {
+                    yield {
+                      type: 'content_block_delta',
+                      index: tc.index,
+                      delta: {
+                        type: 'input_json_delta',
+                        partial_json: suffixToAdd,
+                      },
+                    }
+                  }
+
+                  yield { type: 'content_block_stop', index: tc.index }
+                }
+
+                const stopReason =
+                  choice.finish_reason === 'tool_calls'
+                    ? 'tool_use'
+                    : choice.finish_reason === 'length'
+                      ? 'max_tokens'
+                      : 'end_turn'
+                if (choice.finish_reason === 'content_filter' || choice.finish_reason === 'safety') {
+                  // Gemini/Azure content safety filter blocked the response.
+                  // Emit a visible text block so the user knows why output was truncated.
+                  if (!hasEmittedContentStart) {
+                    yield {
+                      type: 'content_block_start',
+                      index: contentBlockIndex,
+                      content_block: { type: 'text', text: '' },
+                    }
+                    hasEmittedContentStart = true
+                  }
                   yield {
                     type: 'content_block_delta',
-                    index: active.index,
-                    delta: {
-                      type: 'input_json_delta',
-                      partial_json: tc.function.arguments,
-                    },
+                    index: contentBlockIndex,
+                    delta: { type: 'text_delta', text: '\n\n[Content blocked by provider safety filter]' },
+                  }
+                } else if (choice.finish_reason === 'length') {
+                  // Response was truncated — either the model hit max_tokens, or
+                  // an upstream/gateway watchdog synthesized a graceful end after
+                  // detecting a stalled stream. Either way, the user should know
+                  // the answer they're seeing isn't complete.
+                  if (!hasEmittedContentStart) {
+                    yield {
+                      type: 'content_block_start',
+                      index: contentBlockIndex,
+                      content_block: { type: 'text', text: '' },
+                    }
+                    hasEmittedContentStart = true
+                  }
+                  yield {
+                    type: 'content_block_delta',
+                    index: contentBlockIndex,
+                    delta: { type: 'text_delta', text: '\n\n[Response truncated — reached length limit or upstream stalled. Ask the model to continue.]' },
                   }
                 }
-              }
-            }
-          }
-
-          // Finish — guard ensures we only process finish_reason once even if
-          // multiple chunks arrive with finish_reason set (some providers do this)
-          if (choice.finish_reason && !hasProcessedFinishReason) {
-            hasProcessedFinishReason = true
-
-            // Close any open thinking block that wasn't closed by content transition
-            if (hasEmittedThinkingStart && !hasClosedThinking) {
-              yield { type: 'content_block_stop', index: contentBlockIndex }
-              contentBlockIndex++
-              hasClosedThinking = true
-            }
-            // Close any open content blocks
-            if (hasEmittedContentStart) {
-              yield* closeActiveContentBlock()
-            }
-            // Close active tool calls
-            for (const [, tc] of activeToolCalls) {
-              if (tc.normalizeAtStop) {
-                let partialJson: string
-                if (choice.finish_reason === 'length') {
-                  // Truncated by max tokens — preserve raw buffer to avoid
-                  // turning an incomplete tool call into an executable command
-                  partialJson = tc.jsonBuffer
-                } else {
-                  const repairedStructuredJson = repairPossiblyTruncatedObjectJson(
-                    tc.jsonBuffer,
-                  )
-                  if (repairedStructuredJson) {
-                    partialJson = repairedStructuredJson
-                  } else {
-                    partialJson = JSON.stringify(
-                      normalizeToolArguments(tc.name, tc.jsonBuffer),
-                    )
-                  }
-                }
+                lastStopReason = stopReason
 
                 yield {
-                  type: 'content_block_delta',
-                  index: tc.index,
-                  delta: {
-                    type: 'input_json_delta',
-                    partial_json: partialJson,
-                  },
+                  type: 'message_delta',
+                  delta: { stop_reason: stopReason, stop_sequence: null },
+                  ...(chunkUsage ? { usage: chunkUsage } : {}),
                 }
-                yield { type: 'content_block_stop', index: tc.index }
-                continue
-              }
-
-              let suffixToAdd = ''
-              if (tc.jsonBuffer) {
-                try {
-                  JSON.parse(tc.jsonBuffer)
-                } catch {
-                  const str = tc.jsonBuffer.trimEnd()
-                  for (const combo of JSON_REPAIR_SUFFIXES) {
-                    try {
-                      JSON.parse(str + combo)
-                      suffixToAdd = combo
-                      break
-                    } catch { }
-                  }
+                if (chunkUsage) {
+                  hasEmittedFinalUsage = true
                 }
               }
-
-              if (suffixToAdd) {
-                yield {
-                  type: 'content_block_delta',
-                  index: tc.index,
-                  delta: {
-                    type: 'input_json_delta',
-                    partial_json: suffixToAdd,
-                  },
-                }
-              }
-
-              yield { type: 'content_block_stop', index: tc.index }
             }
 
-            const stopReason =
-              choice.finish_reason === 'tool_calls'
-                ? 'tool_use'
-                : choice.finish_reason === 'length'
-                  ? 'max_tokens'
-                  : 'end_turn'
-            if (choice.finish_reason === 'content_filter' || choice.finish_reason === 'safety') {
-              // Gemini/Azure content safety filter blocked the response.
-              // Emit a visible text block so the user knows why output was truncated.
-              if (!hasEmittedContentStart) {
-                yield {
-                  type: 'content_block_start',
-                  index: contentBlockIndex,
-                  content_block: { type: 'text', text: '' },
-                }
-                hasEmittedContentStart = true
-              }
+            if (
+              !hasEmittedFinalUsage &&
+              chunkUsage &&
+              (chunk.choices?.length ?? 0) === 0 &&
+              lastStopReason !== null
+            ) {
               yield {
-                type: 'content_block_delta',
-                index: contentBlockIndex,
-                delta: { type: 'text_delta', text: '\n\n[Content blocked by provider safety filter]' },
+                type: 'message_delta',
+                delta: { stop_reason: lastStopReason, stop_sequence: null },
+                usage: chunkUsage,
               }
-            }
-            lastStopReason = stopReason
-
-            yield {
-              type: 'message_delta',
-              delta: { stop_reason: stopReason, stop_sequence: null },
-              ...(chunkUsage ? { usage: chunkUsage } : {}),
-            }
-            if (chunkUsage) {
               hasEmittedFinalUsage = true
             }
           }
         }
-
-        if (
-          !hasEmittedFinalUsage &&
-          chunkUsage &&
-          (chunk.choices?.length ?? 0) === 0 &&
-          lastStopReason !== null
-        ) {
-          yield {
-            type: 'message_delta',
-            delta: { stop_reason: lastStopReason, stop_sequence: null },
-            usage: chunkUsage,
-          }
-          hasEmittedFinalUsage = true
-        }
       }
     }
+  } catch (error) {
+    logForDebugging(`Stream processing error: ${error instanceof Error ? error.message : String(error)}`, { level: 'warn' })
+    throw error
   } finally {
     reader.releaseLock()
   }
@@ -1350,7 +1621,11 @@ class OpenAIShimMessages {
       if (params.stream) {
         const isResponsesStream = response.url?.includes('/responses')
         return new OpenAIShimStream(
-          (request.transport === 'codex_responses' || isResponsesStream)
+          (
+            request.transport === 'codex_responses' ||
+            request.transport === 'responses' ||
+            isResponsesStream
+          )
             ? codexStreamToAnthropic(response, request.resolvedModel, options?.signal)
             : openaiStreamToAnthropic(response, request.resolvedModel, options?.signal),
         )
@@ -1365,7 +1640,11 @@ class OpenAIShimMessages {
       }
 
       const isResponsesNonStream = response.url?.includes('/responses')
-      if (isResponsesNonStream || (request.transport === 'chat_completions' && isGithubModelsMode())) {
+      if (
+        request.transport === 'responses' ||
+        isResponsesNonStream ||
+        (request.transport === 'chat_completions' && isGithubModelsMode())
+      ) {
         const contentType = response.headers.get('content-type') ?? ''
         if (contentType.includes('application/json')) {
           const parsed = await response.json() as Record<string, unknown>
@@ -1499,22 +1778,30 @@ class OpenAIShimMessages {
     params: ShimCreateParams,
     options?: { signal?: AbortSignal; headers?: Record<string, string> },
   ): Promise<Response> {
-    const compressedMessages = compressToolHistory(
-      params.messages as Array<{
-        role: string
-        message?: { role?: string; content?: unknown }
-        content?: unknown
-      }>,
-      request.resolvedModel,
-    )
+    // Local backends (llama.cpp, vLLM, Ollama, LM Studio, …) do not implement
+    // the cloud-side caching/strict-validation behaviours that several of our
+    // pre-send transforms target. Computing the fast-path config once here
+    // lets us skip those transforms uniformly. See providerConfig.ts.
+    const fastPath: LocalFastPathConfig = getLocalFastPathConfig(request.baseUrl)
+
+    const rawMessages = params.messages as Array<{
+      role: string
+      message?: { role?: string; content?: unknown }
+      content?: unknown
+    }>
+    const compressedMessages = fastPath.skipToolHistoryCompression
+      ? rawMessages
+      : compressToolHistory(rawMessages, request.resolvedModel)
+    const runtimeShimContext = resolveOpenAIShimRuntimeContext({
+      processEnv: process.env,
+      baseUrl: request.baseUrl,
+      model: request.resolvedModel,
+      treatAsLocal: isLocalProviderUrl(request.baseUrl),
+    })
+    const shimConfig = runtimeShimContext.openaiShimConfig
     const openaiMessages = convertMessages(compressedMessages, params.system, {
-      // Moonshot/Kimi Code requires every assistant tool-call message to carry
-      // reasoning_content when its thinking feature is active. DeepSeek does
-      // the same for tool-call turns in thinking mode. Echo it back from the
-      // thinking block we captured on the inbound response.
-      preserveReasoningContent:
-        isMoonshotCompatibleBaseUrl(request.baseUrl) ||
-        isDeepSeekBaseUrl(request.baseUrl),
+      preserveReasoningContent: shimConfig.preserveReasoningContent,
+      reasoningContentFallback: shimConfig.reasoningContentFallback,
     })
 
     const body: Record<string, unknown> = {
@@ -1522,6 +1809,13 @@ class OpenAIShimMessages {
       messages: openaiMessages,
       stream: params.stream ?? false,
       store: false,
+    }
+    // Emit reasoning_effort for chat_completions when the resolved provider
+    // request carries a reasoning effort (set via /effort, model alias default,
+    // or `?reasoning=<level>` query on the model string). OpenAI, Codex, and
+    // most OpenAI-compatible endpoints read it from this top-level field.
+    if (request.reasoning) {
+      body.reasoning_effort = request.reasoning.effort
     }
     // Convert max_tokens to max_completion_tokens for OpenAI API compatibility.
     // Azure OpenAI requires max_completion_tokens and does not accept max_tokens.
@@ -1544,35 +1838,38 @@ class OpenAIShimMessages {
     }
 
     const isGithub = isGithubModelsMode()
-    const isMistral = isMistralMode()
     const isLocal = isLocalProviderUrl(request.baseUrl)
 
     const githubEndpointType = getGithubEndpointType(request.baseUrl)
     const isGithubCopilot = isGithub && githubEndpointType === 'copilot'
     const isGithubModels = isGithub && (githubEndpointType === 'models' || githubEndpointType === 'custom')
+    const shouldStripResponsesStore =
+      (shimConfig.removeBodyFields ?? []).includes('store') ||
+      isGeminiMode() ||
+      hasGeminiApiHost(request.baseUrl) ||
+      hasCerebrasApiHost(request.baseUrl) ||
+      isLocal
 
-    const isMoonshot = isMoonshotCompatibleBaseUrl(request.baseUrl)
-    const isDeepSeek = isDeepSeekBaseUrl(request.baseUrl)
-
-    if ((isGithub || isMistral || isLocal || isMoonshot || isDeepSeek) && body.max_completion_tokens !== undefined) {
+    if (
+      shimConfig.maxTokensField === 'max_tokens' &&
+      body.max_completion_tokens !== undefined
+    ) {
       body.max_tokens = body.max_completion_tokens
       delete body.max_completion_tokens
     }
 
-    // mistral and gemini don't recognize body.store — Gemini returns 400
-    // "Invalid JSON payload received. Unknown name 'store': Cannot find field."
-    // Moonshot direct API, Kimi Code's OpenAI-compatible coding endpoint,
-    // and DeepSeek have not published support for the parameter either;
-    // strip it preemptively to avoid the same class of error on strict-parse
-    // providers.
-    if (isMistral || isGeminiMode() || isMoonshot || isDeepSeek) {
+    for (const field of shimConfig.removeBodyFields ?? []) {
+      delete body[field]
+    }
+
+    if (shouldStripResponsesStore) {
       delete body.store
     }
 
     if (params.temperature !== undefined) body.temperature = params.temperature
     if (params.top_p !== undefined) body.top_p = params.top_p
 
-    if (isDeepSeek) {
+    if (shimConfig.thinkingRequestFormat === 'deepseek-compatible') {
       const requestedThinkingType = (params.thinking as { type?: string } | undefined)?.type
       const deepSeekThinkingType =
         requestedThinkingType === 'disabled'
@@ -1600,6 +1897,7 @@ class OpenAIShimMessages {
           description?: string
           input_schema?: Record<string, unknown>
         }>,
+        { skipStrict: fastPath.skipStrictTools },
       )
       if (converted.length > 0) {
         body.tools = converted
@@ -1621,18 +1919,92 @@ class OpenAIShimMessages {
       }
     }
 
+    let omitResponsesTools = false
+    const buildResponsesBody = (): Record<string, unknown> => {
+      const responsesBody: Record<string, unknown> = {
+        model: request.resolvedModel,
+        input: convertAnthropicMessagesToResponsesInput(
+          params.messages as Array<{
+            role?: string
+            message?: { role?: string; content?: unknown }
+            content?: unknown
+          }>,
+        ),
+        stream: params.stream ?? false,
+        store: false,
+      }
+
+      if (shouldStripResponsesStore) {
+        delete responsesBody.store
+      }
+
+      if (!Array.isArray(responsesBody.input) || responsesBody.input.length === 0) {
+        responsesBody.input = [
+          {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: '' }],
+          },
+        ]
+      }
+
+      const systemText = convertSystemPrompt(params.system)
+      if (systemText) {
+        responsesBody.instructions = systemText
+      }
+
+      if (body.max_tokens !== undefined) {
+        responsesBody.max_output_tokens = body.max_tokens
+      } else if (body.max_completion_tokens !== undefined) {
+        responsesBody.max_output_tokens = body.max_completion_tokens
+      }
+
+      if (params.temperature !== undefined) responsesBody.temperature = params.temperature
+      if (params.top_p !== undefined) responsesBody.top_p = params.top_p
+
+      if (!omitResponsesTools && params.tools && params.tools.length > 0) {
+        const convertedTools = convertToolsToResponsesTools(
+          params.tools as Array<{
+            name?: string
+            description?: string
+            input_schema?: Record<string, unknown>
+          }>,
+        )
+        if (convertedTools.length > 0) {
+          responsesBody.tools = convertedTools
+        }
+      }
+
+      return responsesBody
+    }
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      ...filterAnthropicHeaders(shimConfig.headers),
       ...this.defaultHeaders,
       ...filterAnthropicHeaders(options?.headers),
     }
 
     const isGemini = isGeminiMode()
-    const isMiniMax = !!process.env.MINIMAX_API_KEY
+    const routeCredential = resolveRouteCredentialValue({
+      routeId: runtimeShimContext.routeId,
+      baseUrl: request.baseUrl,
+      processEnv: process.env,
+    })
     const apiKey =
       this.providerOverride?.apiKey ??
+      routeCredential ??
       process.env.OPENAI_API_KEY ??
-      (isMiniMax ? process.env.MINIMAX_API_KEY : '')
+      ''
+    const configuredAuthHeaderValue = process.env.OPENAI_AUTH_HEADER_VALUE?.trim()
+    const customAuthHeader = process.env.OPENAI_AUTH_HEADER?.trim()
+    const hasCustomAuthHeader = Boolean(
+      customAuthHeader &&
+      /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/.test(customAuthHeader),
+    )
+    const authValue = hasCustomAuthHeader
+      ? configuredAuthHeaderValue || apiKey
+      : apiKey
     // Detect Azure endpoints by hostname (not raw URL) to prevent bypass via
     // path segments like https://evil.com/cognitiveservices.azure.com/
     let isAzure = false
@@ -1644,18 +2016,37 @@ class OpenAIShimMessages {
 
     let isBankr = false
     try {
-      isBankr = request.baseUrl.toLowerCase().includes('bankr')
+      isBankr =
+        runtimeShimContext.routeId === 'bankr' ||
+        request.baseUrl.toLowerCase().includes('bankr')
     } catch { /* malformed URL — not Bankr */ }
 
-    if (apiKey) {
-      if (isAzure) {
+    if (authValue) {
+      if (hasCustomAuthHeader && customAuthHeader) {
+        const defaultCustomAuthScheme =
+          customAuthHeader.toLowerCase() === 'authorization' ? 'bearer' : 'raw'
+        const customAuthScheme =
+          process.env.OPENAI_AUTH_SCHEME === 'raw' ||
+            process.env.OPENAI_AUTH_SCHEME === 'bearer'
+            ? process.env.OPENAI_AUTH_SCHEME
+            : defaultCustomAuthScheme
+        headers[customAuthHeader] =
+          customAuthScheme === 'bearer'
+            ? `Bearer ${authValue}`
+            : authValue
+      } else if (isAzure) {
         // Azure uses api-key header instead of Bearer token
-        headers['api-key'] = apiKey
+        headers['api-key'] = authValue
       } else if (isBankr) {
         // Bankr uses X-API-Key header instead of Bearer token
-        headers['X-API-Key'] = apiKey
+        headers['X-API-Key'] = authValue
+      } else if (shimConfig.defaultAuthHeader?.name) {
+        headers[shimConfig.defaultAuthHeader.name] =
+          shimConfig.defaultAuthHeader.scheme === 'bearer'
+            ? `Bearer ${authValue}`
+            : authValue
       } else {
-        headers.Authorization = `Bearer ${apiKey}`
+        headers.Authorization = `Bearer ${authValue}`
       }
     } else if (isGemini) {
       const geminiCredential = await resolveGeminiCredential(process.env)
@@ -1702,8 +2093,13 @@ class OpenAIShimMessages {
       ? getLocalProviderRetryBaseUrls(request.baseUrl)
       : []
 
+    const buildRequestUrl = (baseUrl: string): string =>
+      request.transport === 'responses'
+        ? `${baseUrl}/responses`
+        : buildChatCompletionsUrl(baseUrl)
+
     let activeBaseUrl = request.baseUrl
-    let chatCompletionsUrl = buildChatCompletionsUrl(activeBaseUrl)
+    let requestUrl = buildRequestUrl(activeBaseUrl)
     const attemptedLocalBaseUrls = new Set<string>([activeBaseUrl])
     let didRetryWithoutTools = false
 
@@ -1715,13 +2111,13 @@ class OpenAIShimMessages {
           continue
         }
 
-        const previousUrl = chatCompletionsUrl
+        const previousUrl = requestUrl
         attemptedLocalBaseUrls.add(candidateBaseUrl)
         activeBaseUrl = candidateBaseUrl
-        chatCompletionsUrl = buildChatCompletionsUrl(activeBaseUrl)
+        requestUrl = buildRequestUrl(activeBaseUrl)
 
         logForDebugging(
-          `[OpenAIShim] self-heal retry reason=${reason} method=POST from=${redactUrlForDiagnostics(previousUrl)} to=${redactUrlForDiagnostics(chatCompletionsUrl)} model=${request.resolvedModel}`,
+          `[OpenAIShim] self-heal retry reason=${reason} method=POST from=${redactUrlForDiagnostics(previousUrl)} to=${redactUrlForDiagnostics(requestUrl)} model=${request.resolvedModel}`,
           { level: 'warn' },
         )
 
@@ -1731,10 +2127,26 @@ class OpenAIShimMessages {
       return false
     }
 
-    let serializedBody = JSON.stringify(body)
+    // WHY: byte-identity required for implicit prefix caching in
+    // OpenAI/Kimi/DeepSeek. stableStringify sorts object keys at every
+    // depth so spurious insertion-order differences across rebuilds of
+    // `body` (spread-merge, conditional assignments above) don't bust
+    // the provider's prefix hash.
+    //
+    // Local backends do not implement prefix caching, so the deep key-sort
+    // is pure CPU overhead per request (issue #1016). Drop to the native
+    // `JSON.stringify` fast path when the fast-path config opts out.
+    const serializeBody = (): string => {
+      const payload =
+        request.transport === 'responses' ? buildResponsesBody() : body
+      return fastPath.skipStableStringify
+        ? JSON.stringify(payload)
+        : stableStringifyJson(payload)
+    }
+    let serializedBody = serializeBody()
 
     const refreshSerializedBody = (): void => {
-      serializedBody = JSON.stringify(body)
+      serializedBody = serializeBody()
     }
 
     const buildFetchInit = () => ({
@@ -1766,7 +2178,7 @@ class OpenAIShimMessages {
       const redactedUrl = redactUrlForDiagnostics(requestUrl)
       const safeMessage =
         redactSecretValueForDisplay(
-          failure.message,
+          redactUrlsInMessage(failure.message),
           process.env as SecretValueSource,
         ) || 'Request failed'
 
@@ -1776,7 +2188,7 @@ class OpenAIShimMessages {
       )
 
       throw APIError.generate(
-        503,
+        0,
         undefined,
         buildOpenAICompatibilityErrorMessage(
           `OpenAI API transport error: ${safeMessage}${failure.code ? ` (code=${failure.code})` : ''}`,
@@ -1800,7 +2212,9 @@ class OpenAIShimMessages {
         classifyOpenAIHttpFailure({
           status,
           body: errorBody,
+          url: requestUrl,
         })
+      const failureWithUrl = { ...failure, requestUrl: failure.requestUrl ?? requestUrl }
       const redactedUrl = redactUrlForDiagnostics(requestUrl)
 
       logForDebugging(
@@ -1813,7 +2227,7 @@ class OpenAIShimMessages {
         parsedBody,
         buildOpenAICompatibilityErrorMessage(
           `OpenAI API error ${status}: ${errorBody}${rateHint}`,
-          failure,
+          failureWithUrl,
         ),
         responseHeaders,
       )
@@ -1822,14 +2236,15 @@ class OpenAIShimMessages {
     let response: Response | undefined
     const provider = request.baseUrl.includes('nvidia') ? 'nvidia-nim'
       : request.baseUrl.includes('minimax') ? 'minimax'
-        : request.baseUrl.includes('localhost:11434') || request.baseUrl.includes('localhost:11435') ? 'ollama'
-          : request.baseUrl.includes('anthropic') ? 'anthropic'
-            : 'openai'
+        : request.baseUrl.includes('xiaomimimo') || request.baseUrl.includes('mimo-v2') ? 'xiaomi-mimo'
+          : request.baseUrl.includes('localhost:11434') || request.baseUrl.includes('localhost:11435') ? 'ollama'
+            : request.baseUrl.includes('anthropic') ? 'anthropic'
+              : 'openai'
     const { correlationId, startTime } = logApiCallStart(provider, request.resolvedModel)
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         response = await fetchWithProxyRetry(
-          chatCompletionsUrl,
+          requestUrl,
           buildFetchInit(),
         )
       } catch (error) {
@@ -1848,7 +2263,7 @@ class OpenAIShimMessages {
         }
 
         const failure = classifyOpenAINetworkFailure(error, {
-          url: chatCompletionsUrl,
+          url: requestUrl,
         })
 
         if (
@@ -1859,7 +2274,14 @@ class OpenAIShimMessages {
           continue
         }
 
-        throwClassifiedTransportError(error, chatCompletionsUrl, failure)
+        throwClassifiedTransportError(error, requestUrl, failure)
+      }
+
+      if (!response) {
+        throw APIError.generate(
+          500, undefined, 'OpenAI shim: response not set after fetch attempt',
+          new Headers(),
+        )
       }
 
       if (response.ok) {
@@ -1904,82 +2326,41 @@ class OpenAIShimMessages {
       if (isGithub && response.status === 400) {
         if (errorBody.includes('/chat/completions') || errorBody.includes('not accessible')) {
           const responsesUrl = `${request.baseUrl}/responses`
-          const responsesBody: Record<string, unknown> = {
-            model: request.resolvedModel,
-            input: convertAnthropicMessagesToResponsesInput(
-              params.messages as Array<{
-                role?: string
-                message?: { role?: string; content?: unknown }
-                content?: unknown
-              }>,
-            ),
-            stream: params.stream ?? false,
-            store: false,
-          }
+          const responsesBody = buildResponsesBody()
 
-          if (!Array.isArray(responsesBody.input) || responsesBody.input.length === 0) {
-            responsesBody.input = [
-              {
-                type: 'message',
-                role: 'user',
-                content: [{ type: 'input_text', text: '' }],
-              },
-            ]
-          }
-
-          const systemText = convertSystemPrompt(params.system)
-          if (systemText) {
-            responsesBody.instructions = systemText
-          }
-
-          if (body.max_tokens !== undefined) {
-            responsesBody.max_output_tokens = body.max_tokens
-          }
-
-          if (params.tools && params.tools.length > 0) {
-            const convertedTools = convertToolsToResponsesTools(
-              params.tools as Array<{
-                name?: string
-                description?: string
-                input_schema?: Record<string, unknown>
-              }>,
-            )
-            if (convertedTools.length > 0) {
-              responsesBody.tools = convertedTools
-            }
-          }
-
-          let responsesResponse: Response
+          let responsesResponse: Response | undefined
           try {
             responsesResponse = await fetchWithProxyRetry(responsesUrl, {
               method: 'POST',
               headers,
-              body: JSON.stringify(responsesBody),
+              body: stableStringifyJson(responsesBody),
               signal: options?.signal,
             })
           } catch (error) {
             throwClassifiedTransportError(error, responsesUrl)
           }
 
-          if (responsesResponse.ok) {
+          if (responsesResponse?.ok) {
             return responsesResponse
           }
-          const responsesErrorBody = await responsesResponse.text().catch(() => 'unknown error')
-          const responsesFailure = classifyOpenAIHttpFailure({
-            status: responsesResponse.status,
-            body: responsesErrorBody,
-          })
-          let responsesErrorResponse: object | undefined
-          try { responsesErrorResponse = JSON.parse(responsesErrorBody) } catch { /* raw text */ }
-          throwClassifiedHttpError(
-            responsesResponse.status,
-            responsesErrorBody,
-            responsesErrorResponse,
-            responsesResponse.headers,
-            responsesUrl,
-            '',
-            responsesFailure,
-          )
+          if (responsesResponse) {
+            const responsesErrorBody = await responsesResponse.text().catch(() => 'unknown error')
+            const responsesFailure = classifyOpenAIHttpFailure({
+              status: responsesResponse.status,
+              body: responsesErrorBody,
+            })
+            let responsesErrorResponse: object | undefined
+            try { responsesErrorResponse = JSON.parse(responsesErrorBody) } catch { /* raw text */ }
+            throwClassifiedHttpError(
+              responsesResponse.status,
+              responsesErrorBody,
+              responsesErrorResponse,
+              responsesResponse.headers,
+              responsesUrl,
+              '',
+              responsesFailure,
+            )
+          }
         }
       }
 
@@ -1997,8 +2378,9 @@ class OpenAIShimMessages {
       }
 
       const hasToolsPayload =
-        Array.isArray(body.tools) &&
-        body.tools.length > 0
+        request.transport === 'responses'
+          ? Array.isArray(params.tools) && params.tools.length > 0
+          : Array.isArray(body.tools) && body.tools.length > 0
 
       if (
         !didRetryWithoutTools &&
@@ -2011,10 +2393,11 @@ class OpenAIShimMessages {
         didRetryWithoutTools = true
         delete body.tools
         delete body.tool_choice
+        omitResponsesTools = true
         refreshSerializedBody()
 
         logForDebugging(
-          `[OpenAIShim] self-heal retry reason=tool_call_incompatible mode=toolless method=POST url=${redactUrlForDiagnostics(chatCompletionsUrl)} model=${request.resolvedModel}`,
+          `[OpenAIShim] self-heal retry reason=tool_call_incompatible mode=toolless method=POST url=${redactUrlForDiagnostics(requestUrl)} model=${request.resolvedModel}`,
           { level: 'warn' },
         )
         continue
@@ -2027,7 +2410,7 @@ class OpenAIShimMessages {
         errorBody,
         errorResponse,
         response.headers as unknown as Headers,
-        chatCompletionsUrl,
+        requestUrl,
         rateHint,
         failure,
       )
@@ -2111,12 +2494,10 @@ class OpenAIShimMessages {
 
     if (choice?.message?.tool_calls) {
       for (const tc of choice.message.tool_calls) {
-        logForDebugging(`[openaiShim] Converting tool call: name=${tc.function.name}, arguments_type=${typeof tc.function.arguments}, arguments=${typeof tc.function.arguments === 'string' ? tc.function.arguments.slice(0, 200) : JSON.stringify(tc.function.arguments).slice(0, 200)}`)
         const input = normalizeToolArguments(
           tc.function.name,
           tc.function.arguments,
         )
-        logForDebugging(`[openaiShim] Normalized input: ${JSON.stringify(input).slice(0, 200)}`)
         content.push({
           type: 'tool_use',
           id: tc.id,
@@ -2125,7 +2506,7 @@ class OpenAIShimMessages {
           ...(tc.extra_content ? { extra_content: tc.extra_content } : {}),
           // Extract Gemini signature from extra_content
           ...((tc.extra_content?.google as any)?.thought_signature
-            ? { signature: (tc.extra_content.google as any).thought_signature }
+            ? { signature: (tc.extra_content?.google as any)?.thought_signature }
             : {}),
         })
       }
@@ -2180,6 +2561,7 @@ export function createOpenAIShimClient(options: {
   hydrateGeminiAccessTokenFromSecureStorage()
   hydrateGithubModelsTokenFromSecureStorage()
 
+
   // When Gemini provider is active, map Gemini env vars to OpenAI-compatible ones
   // so the existing providerConfig.ts infrastructure picks them up correctly.
   if (isEnvTruthy(process.env.CLAUDE_CODE_USE_GEMINI)) {
@@ -2202,7 +2584,7 @@ export function createOpenAIShimClient(options: {
       process.env.OPENAI_MODEL = process.env.MISTRAL_MODEL
     }
   } else if (isEnvTruthy(process.env.CLAUDE_CODE_USE_GITHUB)) {
-    process.env.OPENAI_BASE_URL ??= GITHUB_COPILOT_BASE
+    process.env.OPENAI_BASE_URL ??= GITHUB_COPILOT_BASE_URL
     process.env.OPENAI_API_KEY ??=
       process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? ''
   }

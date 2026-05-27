@@ -1,6 +1,25 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { mock } = require('bun:test');
+const {
+  acquireEnvMutex,
+  releaseEnvMutex,
+} = require('../../../src/entrypoints/sdk/shared.js');
+
+test.beforeEach(async () => {
+  const result = await acquireEnvMutex();
+  if (!result.acquired) {
+    throw new Error('Timed out acquiring shared test mutation lock for vscode extension test');
+  }
+});
+
+test.afterEach(() => {
+  try {
+    mock.restore();
+  } finally {
+    releaseEnvMutex();
+  }
+});
 
 function createStatus(overrides = {}) {
   return {
@@ -41,7 +60,7 @@ function loadExtension() {
     window: {
       activeTextEditor: null,
       createWebviewPanel: () => ({}),
-      registerWebviewViewProvider: () => ({ dispose() {} }),
+      registerWebviewViewProvider: () => ({ dispose() { } }),
       showInformationMessage: async () => undefined,
       showErrorMessage: async () => undefined,
     },
@@ -49,7 +68,7 @@ function loadExtension() {
       openExternal: async () => true,
     },
     commands: {
-      registerCommand: () => ({ dispose() {} }),
+      registerCommand: () => ({ dispose() { } }),
       executeCommand: async () => undefined,
     },
     Uri: { parse: value => value, file: value => value },
