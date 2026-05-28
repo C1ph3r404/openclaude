@@ -81,22 +81,6 @@ import { parseJSONL } from './json.js'
 import { logError } from './log.js'
 import { extractTag, isCompactBoundaryMessage } from './messages.js'
 import { sanitizePath } from './path.js'
-
-// Helper to log BrowserLLM debug messages to file
-function debugLog(msg: string) {
-  try {
-    const fs = getFsImplementation()
-    const path = require('path')
-    const debugDir = path.join(getClaudeConfigHomeDir(), 'debug')
-    if (!fs.existsSync(debugDir)) {
-      fs.mkdirSync(debugDir, { recursive: true, mode: 0o700 })
-    }
-    const debugFile = path.join(debugDir, 'debug.log')
-    fs.appendFileSync(debugFile, `[${new Date().toISOString()}] ${msg}\n`, { mode: 0o600 })
-  } catch {
-    // Silently fail if debug logging fails
-  }
-}
 import {
   extractJsonStringField,
   extractLastJsonStringField,
@@ -1456,26 +1440,26 @@ export async function recordTranscript(
   // Save BrowserLLM conversation ID after first assistant message
   const hasAssistantMsg = newMessages.some(m => m.type === 'assistant')
   const alreadySaved = getProject().currentSessionBrowserLLMConvoId
-  debugLog(`[BROWSERLLM] recordTranscript: hasAssistantMsg=${hasAssistantMsg}, alreadySaved=${alreadySaved}`)
+  logForDebugging(`[BROWSERLLM] recordTranscript: hasAssistantMsg=${hasAssistantMsg}, alreadySaved=${alreadySaved}`)
 
   if (hasAssistantMsg && !alreadySaved) {
     void (async () => {
       try {
         const { isBrowserLLMProvider, getCurrentChatId } = await import('../services/api/browserLLMProvider.js')
-        debugLog(`[BROWSERLLM] recordTranscript: imported functions`)
+        logForDebugging(`[BROWSERLLM] recordTranscript: imported functions`)
         const isBrowserLLM = isBrowserLLMProvider()
-        debugLog(`[BROWSERLLM] recordTranscript: isBrowserLLMProvider=${isBrowserLLM}`)
+        logForDebugging(`[BROWSERLLM] recordTranscript: isBrowserLLMProvider=${isBrowserLLM}`)
         if (isBrowserLLM) {
           const chatId = await getCurrentChatId()
-          debugLog(`[BROWSERLLM] recordTranscript: getCurrentChatId returned: ${chatId}`)
+          logForDebugging(`[BROWSERLLM] recordTranscript: getCurrentChatId returned: ${chatId}`)
           if (chatId) {
-            debugLog(`[BROWSERLLM] recordTranscript: saving convoId=${chatId}`)
+            logForDebugging(`[BROWSERLLM] recordTranscript: saving convoId=${chatId}`)
             saveBrowserLLMConvoId(chatId)
-            debugLog(`[BROWSERLLM] recordTranscript: saved successfully`)
+            logForDebugging(`[BROWSERLLM] recordTranscript: saved successfully`)
           }
         }
       } catch (error) {
-        debugLog(`[BROWSERLLM] recordTranscript: ERROR:` + ` ${error}`)
+        logForDebugging(`[BROWSERLLM] recordTranscript: ERROR:` + ` ${error}`)
       }
     })()
   }
@@ -3312,8 +3296,8 @@ export async function loadFullLog(log: LogOption): Promise<LogOption> {
     // metadata entries (custom-title etc.) are keyed by the current session.
     const sessionId = mostRecentLeaf.sessionId as UUID | undefined
 
-    debugLog(`[BROWSERLLM] loadFullLog: browserLLMConvoIds.size=${browserLLMConvoIds.size}, keys=[${Array.from(browserLLMConvoIds.keys()).join(', ')}]`)
-    debugLog(`[BROWSERLLM] loadFullLog: looking up sessionId=${sessionId}`)
+    logForDebugging(`[BROWSERLLM] loadFullLog: browserLLMConvoIds.size=${browserLLMConvoIds.size}, keys=[${Array.from(browserLLMConvoIds.keys()).join(', ')}]`)
+    logForDebugging(`[BROWSERLLM] loadFullLog: looking up sessionId=${sessionId}`)
 
     let convoId: string | undefined
     if (sessionId)
@@ -3322,14 +3306,14 @@ export async function loadFullLog(log: LogOption): Promise<LogOption> {
     // If not found by sessionId, try any entry in the map (may have different sessionId key)
     if (!convoId && browserLLMConvoIds.size > 0) {
       convoId = Array.from(browserLLMConvoIds.values())[0]
-      debugLog(`[BROWSERLLM] loadFullLog: No match for sessionId, using first map entry: ${convoId}`)
+      logForDebugging(`[BROWSERLLM] loadFullLog: No match for sessionId, using first map entry: ${convoId}`)
     }
 
     // Final fallback to log field
     if (!convoId)
       convoId = log.browserLLMConvoId
 
-    debugLog(`[BROWSERLLM] loadFullLog: sessionId=${sessionId}, convoId=${convoId}`)
+    logForDebugging(`[BROWSERLLM] loadFullLog: sessionId=${sessionId}, convoId=${convoId}`)
 
     return {
       ...log,
@@ -3946,7 +3930,7 @@ export async function loadTranscriptFile(
             prUrls.set(entry.sessionId, entry.prUrl)
             prRepositories.set(entry.sessionId, entry.prRepository)
           } else if (entry.type === 'browserllm-convo-id' && entry.sessionId) {
-            debugLog(`[BROWSERLLM] loadTranscriptFile metadata pass: Found browserllm-convo-id entry: sessionId=${entry.sessionId}, convoId=${entry.convoId}`)
+            logForDebugging(`[BROWSERLLM] loadTranscriptFile metadata pass: Found browserllm-convo-id entry: sessionId=${entry.sessionId}, convoId=${entry.convoId}`)
             browserLLMConvoIds.set(entry.sessionId, entry.convoId)
           }
         })
@@ -4013,7 +3997,7 @@ export async function loadTranscriptFile(
         prUrls.set(entry.sessionId, entry.prUrl)
         prRepositories.set(entry.sessionId, entry.prRepository)
       } else if (entry.type === 'browserllm-convo-id' && entry.sessionId) {
-        debugLog(`[BROWSERLLM] loadTranscriptFile: Found browserllm-convo-id entry: sessionId=${entry.sessionId}, convoId=${entry.convoId}`)
+        logForDebugging(`[BROWSERLLM] loadTranscriptFile: Found browserllm-convo-id entry: sessionId=${entry.sessionId}, convoId=${entry.convoId}`)
         browserLLMConvoIds.set(entry.sessionId, entry.convoId)
       } else if (entry.type === 'file-history-snapshot') {
         fileHistorySnapshots.set(entry.messageId, entry)

@@ -93,6 +93,7 @@ ${question}`
     maxTurns: 1, // Single turn only - no tool use loops
     // No future request shares this suffix; skip writing cache entries.
     skipCacheWrite: true,
+    overrides: { agentType: 'side_question' },
   })
 
   return {

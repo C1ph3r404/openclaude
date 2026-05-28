@@ -37,6 +37,7 @@ import {
 import type { BashToolInput } from '../../tools/BashTool/BashTool.js'
 import { startSpeculativeClassifierCheck } from '../../tools/BashTool/bashPermissions.js'
 import { BASH_TOOL_NAME } from '../../tools/BashTool/toolName.js'
+import { ASK_USER_QUESTION_TOOL_NAME } from '../../tools/AskUserQuestionTool/prompt.js'
 import { FILE_EDIT_TOOL_NAME } from '../../tools/FileEditTool/constants.js'
 import { FILE_READ_TOOL_NAME } from '../../tools/FileReadTool/prompt.js'
 import { FILE_WRITE_TOOL_NAME } from '../../tools/FileWriteTool/prompt.js'
@@ -614,10 +615,63 @@ export function getSchemaValidationToolUseResult(
   return `InputValidationError: ${override ?? fallbackMessage ?? ''}`
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function normalizeToolInputForValidation(
+  tool: Pick<Tool, 'name'>,
+  input: unknown,
+): unknown {
+  if (!isRecord(input)) {
+    return input
+  }
+
+  if (tool.name === FILE_READ_TOOL_NAME) {
+    // Codex strict tool schemas can emit placeholder pages: "" / null for
+    // non-PDF reads. Treat those the same as omission before zod validation.
+    const pages = input.pages
+    if (pages === null || (typeof pages === 'string' && pages.trim() === '')) {
+      const { pages: _pages, ...rest } = input
+      return rest
+    }
+    return input
+  }
+
+  if (tool.name !== ASK_USER_QUESTION_TOOL_NAME) {
+    return input
+  }
+
+  if (Array.isArray(input.questions)) {
+    return input
+  }
+
+  const { question, header, options, multiSelect, ...rest } = input
+  if (
+    typeof question !== 'string' ||
+    typeof header !== 'string' ||
+    !Array.isArray(options)
+  ) {
+    return input
+  }
+
+  return {
+    ...rest,
+    questions: [
+      {
+        question,
+        header,
+        options,
+        ...(typeof multiSelect === 'boolean' ? { multiSelect } : {}),
+      },
+    ],
+  }
+}
+
 async function checkPermissionsAndCallTool(
   tool: Tool,
   toolUseID: string,
-  input: { [key: string]: boolean | string | number },
+  input: unknown,
   toolUseContext: ToolUseContext,
   canUseTool: CanUseToolFn,
   assistantMessage: AssistantMessage,
@@ -629,41 +683,13 @@ async function checkPermissionsAndCallTool(
     progress: ToolProgress<ToolProgressData> | ProgressMessage<HookProgress>,
   ) => void,
 ): Promise<MessageUpdateLazy[]> {
+  const normalizedInput = normalizeToolInputForValidation(tool, input)
   // Validate input types with zod (surprisingly, the model is not great at generating valid input)
-  // First, normalize any aliased parameters to their canonical names
-  let normalizedInput = input
-  if (tool.parameterAliases && Object.keys(tool.parameterAliases).length > 0) {
-    try {
-      const reverseAliasMap = buildReverseAliasMap(tool.parameterAliases)
-      normalizedInput = normalizeAliasedInput(
-        { ...input } as Record<string, unknown>,
-        reverseAliasMap,
-      )
-    } catch (aliasError) {
-      // If alias processing fails, return a validation error
-      const errorContent = `InputValidationError: Failed to normalize parameter aliases: ${errorMessage(aliasError)}`
-      logForDebugging(`${tool.name} tool alias resolution error: ${errorContent}`)
-      return [
-        {
-          message: createUserMessage({
-            content: [
-              {
-                type: 'tool_result',
-                content: `<tool_use_error>${errorContent}</tool_use_error>`,
-                is_error: true,
-                tool_use_id: toolUseID,
-              },
-            ],
-          }),
-        },
-      ]
-    }
-  }
   const parsedInput = tool.inputSchema.safeParse(normalizedInput)
   if (!parsedInput.success) {
     const fallbackErrorContent = formatZodValidationError(tool.name, parsedInput.error)
     let errorContent =
-      getSchemaValidationErrorOverride(tool, input) ?? fallbackErrorContent
+      getSchemaValidationErrorOverride(tool, normalizedInput) ?? fallbackErrorContent
 
     const schemaHint = buildSchemaNotSentHint(
       tool,
@@ -723,7 +749,7 @@ async function checkPermissionsAndCallTool(
           ],
           toolUseResult: getSchemaValidationToolUseResult(
             tool,
-            input,
+            normalizedInput,
             parsedInput.error.message,
           ),
           sourceToolAssistantUUID: assistantMessage.uuid,
@@ -1350,7 +1376,7 @@ async function checkPermissionsAndCallTool(
       ? getMcpServerScopeFromToolName(tool.name)
       : null
 
-    
+
     // Run PostToolUse hooks
     let toolOutput = result.data
     const hookResults = []
@@ -1622,7 +1648,7 @@ async function checkPermissionsAndCallTool(
         ? getMcpServerScopeFromToolName(tool.name)
         : null
 
-          }
+    }
     const content = formatError(error)
 
     // Determine if this was a user interrupt

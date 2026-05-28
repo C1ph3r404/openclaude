@@ -246,17 +246,17 @@ const initSessionMemoryConfigIfNeeded = memoize((): void => {
   const config: SessionMemoryConfig = {
     minimumMessageTokensToInit:
       remoteConfig.minimumMessageTokensToInit &&
-      remoteConfig.minimumMessageTokensToInit > 0
+        remoteConfig.minimumMessageTokensToInit > 0
         ? remoteConfig.minimumMessageTokensToInit
         : DEFAULT_SESSION_MEMORY_CONFIG.minimumMessageTokensToInit,
     minimumTokensBetweenUpdate:
       remoteConfig.minimumTokensBetweenUpdate &&
-      remoteConfig.minimumTokensBetweenUpdate > 0
+        remoteConfig.minimumTokensBetweenUpdate > 0
         ? remoteConfig.minimumTokensBetweenUpdate
         : DEFAULT_SESSION_MEMORY_CONFIG.minimumTokensBetweenUpdate,
     toolCallsBetweenUpdates:
       remoteConfig.toolCallsBetweenUpdates &&
-      remoteConfig.toolCallsBetweenUpdates > 0
+        remoteConfig.toolCallsBetweenUpdates > 0
         ? remoteConfig.toolCallsBetweenUpdates
         : DEFAULT_SESSION_MEMORY_CONFIG.toolCallsBetweenUpdates,
   }
@@ -321,7 +321,7 @@ const extractSessionMemory = sequential(async function (
     canUseTool: createMemoryFileCanUseTool(memoryPath),
     querySource: 'session_memory',
     forkLabel: 'session_memory',
-    overrides: { readFileState: setupContext.readFileState },
+    overrides: { readFileState: setupContext.readFileState, agentType: 'session_memory' },
   })
 
   // Log extraction event for tracking frequency
@@ -429,7 +429,7 @@ export async function manuallyExtractSessionMemory(
       canUseTool: createMemoryFileCanUseTool(memoryPath),
       querySource: 'session_memory',
       forkLabel: 'session_memory_manual',
-      overrides: { readFileState: setupContext.readFileState },
+      overrides: { readFileState: setupContext.readFileState, agentType: 'session_memory' },
     })
 
     // Log manual extraction event

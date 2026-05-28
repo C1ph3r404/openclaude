@@ -102,7 +102,7 @@ ${commits}
 }
 
 const inGitRepo = isGitRepo(parent_cwd);
-const gitStatus = isGitRepo ? getGitStatus(parent_cwd) : null;
+const gitStatus = inGitRepo ? getGitStatus(parent_cwd) : null;
 const shell = process.env.SHELL || "unknown";
 const child_cwd = "/home/nate/Projects/OpenCode/BrowserLLM/";
 const server_path = "src/server/server.js";
@@ -113,7 +113,7 @@ export function startServer(isResume) {
     return new Promise((resolve, reject) => {
         child = fork(server_path, [], {
             cwd: child_cwd,
-            silent: true,
+            silent: false,
             env: {
                 ...process.env,
                 SHELL: shell,
@@ -126,13 +126,16 @@ export function startServer(isResume) {
 
         globalThis.browserLLMChild = child;
 
-        child.on("message", (msg) => {
+        child.once("message", (msg) => {
             if (msg === "ready") {
                 console.log("BrowserLLM server is ready.");
                 resolve(child);
             }
         });
+        child.once("error", reject);
+        child.once("exit", (code) => {
+            reject(new Error(`Child exited with code ${code}`));
+        });
 
-        child.on("error", reject);
     });
 }

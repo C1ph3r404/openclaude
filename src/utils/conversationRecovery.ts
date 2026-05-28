@@ -25,7 +25,10 @@ import {
 } from './fileHistory.js'
 import { logError } from './log.js'
 import { getAPIProvider } from './model/providers.js'
-import { usesAnthropicNativeMessageFormat } from '../integrations/runtimeMetadata.js'
+import {
+  resolveOpenAIShimRuntimeContext,
+  usesAnthropicNativeMessageFormat,
+} from '../integrations/runtimeMetadata.js'
 import {
   createAssistantMessage,
   createUserMessage,
@@ -51,6 +54,7 @@ import {
 } from './sessionStorage.js'
 import { jsonStringify } from './slowOperations.js'
 import type { ContentReplacementRecord } from './toolResultStorage.js'
+import { logForDebugging } from './debug.js'
 
 // Dead code elimination: internal-only tool names are conditionally required so
 // their strings don't leak into external builds. Static imports always bundle.
@@ -198,6 +202,27 @@ function stripThinkingBlocks(messages: NormalizedMessage[]): NormalizedMessage[]
   }, [])
 }
 
+// Some 3P providers require `reasoning_content` echoed back on assistant
+// messages (DeepSeek thinking mode, Moonshot/Kimi, Z.AI GLM, MiMo, etc.). The
+// openai-shim re-shapes those messages and reads the source-of-truth from the
+// `thinking` block on the Anthropic side. Stripping the block leaves the shim
+// with no reasoning text and the provider 400s with
+// "reasoning_content in the thinking mode must be passed back" (issue #957).
+//
+// Vendors declare this need via `openaiShim.preserveReasoningContent: true`
+// in their descriptor, so derive the answer from the resolved shim config
+// instead of hardcoding model name prefixes — that automatically covers any
+// future vendor that opts in without code changes here.
+function shouldPreserveThinkingBlocksForProviderReplay(): boolean {
+  return (
+    resolveOpenAIShimRuntimeContext({
+      processEnv: process.env,
+      baseUrl: process.env.OPENAI_BASE_URL,
+      model: process.env.OPENAI_MODEL,
+    }).openaiShimConfig.preserveReasoningContent === true
+  )
+}
+
 /**
  * Deserializes messages from a log file into the format expected by the REPL.
  * Filters unresolved tool uses, orphaned thinking messages, and appends a
@@ -251,6 +276,13 @@ export function deserializeMessagesWithInterruptDetection(
     // Strip thinking/redacted_thinking content blocks from assistant messages
     // when resuming against a 3P provider. These Anthropic-specific blocks cause
     // 400 errors or context corruption on OpenAI-compatible providers (issue #248 finding 5).
+    //
+    // Exception: providers that require `reasoning_content` echoed back on
+    // assistant messages (DeepSeek thinking mode, Moonshot/Kimi, Z.AI GLM, etc.)
+    // read the source-of-truth from the `thinking` block when re-shaping the
+    // outgoing OpenAI-format message. Stripping the block leaves the shim with
+    // no reasoning text to attach, and the provider 400s with
+    // "reasoning_content in the thinking mode must be passed back" (issue #957).
     const provider = getAPIProvider()
     const isAnthropicNativeTransport = usesAnthropicNativeMessageFormat({
       processEnv: process.env,
@@ -259,9 +291,10 @@ export function deserializeMessagesWithInterruptDetection(
     })
     const isThirdPartyProvider =
       provider !== 'foundry' && !isAnthropicNativeTransport
-    const thinkingStripped = isThirdPartyProvider
-      ? stripThinkingBlocks(filteredThinking)
-      : filteredThinking
+    const thinkingStripped =
+      isThirdPartyProvider && !shouldPreserveThinkingBlocksForProviderReplay()
+        ? stripThinkingBlocks(filteredThinking)
+        : filteredThinking
 
     // Filter out assistant messages with only whitespace text content.
     // This can happen when model outputs "\n\n" before thinking, user cancels mid-stream.
@@ -549,7 +582,7 @@ export async function loadConversationForResume(
   fullPath?: string
 } | null> {
   try {
-    debugLog(`[BROWSERLLM] loadConversationForResume: CALLED with source=${typeof source === 'string' ? source : 'LogOption'}`)
+    logForDebugging(`[BROWSERLLM] loadConversationForResume: CALLED with source=${typeof source === 'string' ? source : 'LogOption'}`)
     let log: LogOption | null = null
     let messages: Message[] | null = null
     let sessionId: UUID | undefined
@@ -603,14 +636,14 @@ export async function loadConversationForResume(
     if (log) {
       // Load full messages for lite logs
       const isLite = isLiteLog(log)
-      void debugLog(`[BROWSERLLM] loadConversationForResume: log received, isLiteLog=${isLite}, log.browserLLMConvoId=${log?.browserLLMConvoId}`)
+      logForDebugging(`[BROWSERLLM] loadConversationForResume: log received, isLiteLog=${isLite}, log.browserLLMConvoId=${log?.browserLLMConvoId}`)
       if (isLite) {
-        void debugLog(`[BROWSERLLM] loadConversationForResume: calling loadFullLog...`)
+        logForDebugging(`[BROWSERLLM] loadConversationForResume: calling loadFullLog...`)
         log = await loadFullLog(log)
-        void debugLog(`[BROWSERLLM] loadConversationForResume: after loadFullLog, log.browserLLMConvoId=${log?.browserLLMConvoId}`)
+        logForDebugging(`[BROWSERLLM] loadConversationForResume: after loadFullLog, log.browserLLMConvoId=${log?.browserLLMConvoId}`)
       } else if (!log.browserLLMConvoId && log.fullPath) {
         // For non-lite logs, we still need to extract browserLLMConvoId from the transcript
-        void debugLog(`[BROWSERLLM] loadConversationForResume: non-lite log, extracting browserLLMConvoId from file...`)
+        logForDebugging(`[BROWSERLLM] loadConversationForResume: non-lite log, extracting browserLLMConvoId from file...`)
         try {
           const { browserLLMConvoIds } = await loadTranscriptFile(log.fullPath)
           const sid = getSessionIdFromLog(log) as UUID | undefined
@@ -621,14 +654,14 @@ export async function loadConversationForResume(
           // If not found by sessionId, try any entry in the map
           if (!convoId && browserLLMConvoIds.size > 0) {
             convoId = Array.from(browserLLMConvoIds.values())[0]
-            void debugLog(`[BROWSERLLM] loadConversationForResume: Using first map entry: ${convoId}`)
+            logForDebugging(`[BROWSERLLM] loadConversationForResume: Using first map entry: ${convoId}`)
           }
           if (convoId) {
             log = { ...log, browserLLMConvoId: convoId }
-            void debugLog(`[BROWSERLLM] loadConversationForResume: Extracted browserLLMConvoId=${convoId}`)
+            logForDebugging(`[BROWSERLLM] loadConversationForResume: Extracted browserLLMConvoId=${convoId}`)
           }
         } catch (err) {
-          void debugLog(`[BROWSERLLM] loadConversationForResume: Error extracting browserLLMConvoId: ${err}`)
+          logForDebugging(`[BROWSERLLM] loadConversationForResume: Error extracting browserLLMConvoId: ${err}`)
         }
       }
 
@@ -692,7 +725,7 @@ export async function loadConversationForResume(
       // Include full path for cross-directory resume
       fullPath: log?.fullPath,
     }
-    debugLog(`[BROWSERLLM] loadConversationForResume: returning browserLLMConvoId=${result.browserLLMConvoId}`)
+    logForDebugging(`[BROWSERLLM] loadConversationForResume: returning browserLLMConvoId=${result.browserLLMConvoId}`)
     return result
   } catch (error) {
     logError(error as Error)

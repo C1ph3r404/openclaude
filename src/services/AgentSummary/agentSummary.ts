@@ -114,7 +114,7 @@ export function startAgentSummarization(
         canUseTool,
         querySource: 'agent_summary',
         forkLabel: 'agent_summary',
-        overrides: { abortController: summaryAbortController },
+        overrides: { abortController: summaryAbortController, agentType: 'agent_summary' },
         skipTranscript: true,
       })
 

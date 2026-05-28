@@ -7,6 +7,7 @@ import {
   readdirSync,
   statSync,
   symlinkSync,
+  existsSync,
 } from 'fs'
 import { homedir } from 'os'
 import { dirname, join } from 'path'

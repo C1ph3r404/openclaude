@@ -40,22 +40,6 @@ import { getCwd } from './cwd.js'
 import { logForDebugging } from './debug.js'
 import type { FileHistorySnapshot } from './fileHistory.js'
 import { fileHistoryRestoreStateFromLog } from './fileHistory.js'
-
-// Helper to log BrowserLLM debug messages to file
-function debugLog(msg: string) {
-  try {
-    const fs = require('fs')
-    const path = require('path')
-    const debugDir = path.join(process.env.HOME || '/root', '.config', 'claude', 'debug')
-    if (!fs.existsSync(debugDir)) {
-      fs.mkdirSync(debugDir, { recursive: true, mode: 0o700 })
-    }
-    const debugFile = path.join(debugDir, 'debug.log')
-    fs.appendFileSync(debugFile, `[${new Date().toISOString()}] ${msg}\n`, { mode: 0o600 })
-  } catch {
-    // Silently fail if debug logging fails
-  }
-}
 import { createSystemMessage } from './messages.js'
 import { parseUserSpecifiedModel } from './model/model.js'
 import { getPlansDirectory } from './plans.js'
@@ -440,7 +424,7 @@ export async function processResumedConversation(
     initialState: AppState
   },
 ): Promise<ProcessedResume> {
-  debugLog(`[BROWSERLLM] processResumedConversation CALLED with result.browserLLMConvoId=${result.browserLLMConvoId}`)
+  logForDebugging(`[BROWSERLLM] processResumedConversation CALLED with result.browserLLMConvoId=${result.browserLLMConvoId}`)
   // Match coordinator/normal mode to the resumed session
   let modeWarning: string | undefined
   if (feature('COORDINATOR_MODE')) {
@@ -470,27 +454,27 @@ export async function processResumedConversation(
       // If resuming with BrowserLLM and we have a saved conversation ID,
       // switch to that conversation in BrowserLLM
       logForDebugging(`[BROWSERLLM] RESUME CHECK: result.browserLLMConvoId=${result.browserLLMConvoId}`)
-      debugLog(`[BROWSERLLM] RESUME CHECK: result.browserLLMConvoId=${result.browserLLMConvoId}`)
-      void debugLog(`[BROWSERLLM] Resume: browserLLMConvoId=${result.browserLLMConvoId}`)
+      logForDebugging(`[BROWSERLLM] RESUME CHECK: result.browserLLMConvoId=${result.browserLLMConvoId}`)
+      void logForDebugging(`[BROWSERLLM] Resume: browserLLMConvoId=${result.browserLLMConvoId}`)
       if (result.browserLLMConvoId) {
         void (async () => {
           try {
-            void debugLog(`[BROWSERLLM] Resume: Calling setChatId with ${result.browserLLMConvoId}`)
+            void logForDebugging(`[BROWSERLLM] Resume: Calling setChatId with ${result.browserLLMConvoId}`)
             const { isBrowserLLMProvider, setChatId } = await import('../services/api/browserLLMProvider.js')
-            void debugLog(`[BROWSERLLM] Resume: imported functions`)
+            void logForDebugging(`[BROWSERLLM] Resume: imported functions`)
             const isBrowserLLM = isBrowserLLMProvider()
-            void debugLog(`[BROWSERLLM] Resume: isBrowserLLMProvider=${isBrowserLLM}`)
+            void logForDebugging(`[BROWSERLLM] Resume: isBrowserLLMProvider=${isBrowserLLM}`)
             if (isBrowserLLM) {
-              void debugLog(`[BROWSERLLM] Resume: calling setChatId(${result.browserLLMConvoId})`)
+              void logForDebugging(`[BROWSERLLM] Resume: calling setChatId(${result.browserLLMConvoId})`)
               const response = await setChatId(result.browserLLMConvoId!)
-              void debugLog(`[BROWSERLLM] Resume: setChatId response: ${JSON.stringify(response)}`)
+              void logForDebugging(`[BROWSERLLM] Resume: setChatId response: ${JSON.stringify(response)}`)
             }
           } catch (error) {
-            void debugLog(`[BROWSERLLM] Resume: ERROR: ${error}`)
+            void logForDebugging(`[BROWSERLLM] Resume: ERROR: ${error}`)
           }
         })()
       } else {
-        void debugLog(`[BROWSERLLM] Resume: NO browserLLMConvoId in result`)
+        void logForDebugging(`[BROWSERLLM] Resume: NO browserLLMConvoId in result`)
       }
     }
   } else if (result.contentReplacements?.length) {

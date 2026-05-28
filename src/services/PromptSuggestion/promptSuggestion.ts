@@ -324,6 +324,7 @@ export async function generateSuggestion(
     forkLabel: 'prompt_suggestion',
     overrides: {
       abortController,
+      agentType: 'prompt_suggestion',
     },
     skipTranscript: true,
     skipCacheWrite: true,
@@ -516,8 +517,8 @@ export function logSuggestionSuppressed(
       resolvedPromptId as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
     ...(process.env.USER_TYPE === 'ant' &&
       suggestion && {
-        suggestion:
-          suggestion as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-      }),
+      suggestion:
+        suggestion as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+    }),
   })
 }

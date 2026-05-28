@@ -73,7 +73,7 @@ function safeRemoveOverlay(overlayPath: string): void {
   rm(
     overlayPath,
     { recursive: true, force: true, maxRetries: 3, retryDelay: 100 },
-    () => {},
+    () => { },
   )
 }
 
@@ -611,10 +611,10 @@ export async function startSpeculation(
         logForDebugging(`[Speculation] Stopping at denied tool: ${tool.name}`)
         const detail = String(
           ('url' in input && input.url) ||
-            ('file_path' in input && input.file_path) ||
-            ('path' in input && input.path) ||
-            ('command' in input && input.command) ||
-            '',
+          ('file_path' in input && input.file_path) ||
+          ('path' in input && input.path) ||
+          ('command' in input && input.command) ||
+          '',
         ).slice(0, 200)
         updateActiveSpeculationState(setAppState, () => ({
           boundary: {
@@ -633,7 +633,7 @@ export async function startSpeculation(
       querySource: 'speculation',
       forkLabel: 'speculation',
       maxTurns: MAX_SPECULATION_TURNS,
-      overrides: { abortController, requireCanUseTool: true },
+      overrides: { abortController, requireCanUseTool: true, agentType: 'speculation' },
       onMessage: msg => {
         if (msg.type === 'assistant' || msg.type === 'user') {
           messagesRef.current.push(msg)
