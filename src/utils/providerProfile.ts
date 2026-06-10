@@ -573,8 +573,8 @@ export function buildGeminiProfileEnv(options: {
   const authMode = options.authMode ?? 'api-key'
   const key = sanitizeApiKey(
     options.apiKey ??
-      processEnv.GEMINI_API_KEY ??
-      processEnv.GOOGLE_API_KEY,
+    processEnv.GEMINI_API_KEY ??
+    processEnv.GOOGLE_API_KEY,
   )
   if (authMode === 'api-key' && !key) {
     return null
@@ -1281,7 +1281,7 @@ export async function buildLaunchEnv(options: {
 
     const geminiAuthMode =
       persistedGeminiAuthMode === 'access-token' ||
-      persistedGeminiAuthMode === 'adc'
+        persistedGeminiAuthMode === 'adc'
         ? persistedGeminiAuthMode
         : 'api-key'
     const geminiKey = shellGeminiKey || persistedGeminiKey
@@ -1448,17 +1448,17 @@ export async function buildLaunchEnv(options: {
     const codexKey = isCodexOAuthProfile
       ? undefined
       : sanitizeApiKey(processEnv.CODEX_API_KEY) ||
-        sanitizeApiKey(persistedEnv.CODEX_API_KEY)
+      sanitizeApiKey(persistedEnv.CODEX_API_KEY)
     const liveCodexCredentials = isCodexOAuthProfile
       ? undefined
       : resolveCodexApiCredentials(processEnv)
     const codexAccountId = isCodexOAuthProfile
       ? persistedEnv.CHATGPT_ACCOUNT_ID || persistedEnv.CODEX_ACCOUNT_ID
       : processEnv.CHATGPT_ACCOUNT_ID ||
-        processEnv.CODEX_ACCOUNT_ID ||
-        liveCodexCredentials?.accountId ||
-        persistedEnv.CHATGPT_ACCOUNT_ID ||
-        persistedEnv.CODEX_ACCOUNT_ID
+      processEnv.CODEX_ACCOUNT_ID ||
+      liveCodexCredentials?.accountId ||
+      persistedEnv.CHATGPT_ACCOUNT_ID ||
+      persistedEnv.CODEX_ACCOUNT_ID
 
     return buildCompatibilityProcessEnv({
       processEnv,
@@ -1521,7 +1521,7 @@ export async function buildLaunchEnv(options: {
   }
   const openAIAuthScheme =
     (processEnv.OPENAI_AUTH_SCHEME === 'bearer' ||
-    processEnv.OPENAI_AUTH_SCHEME === 'raw'
+      processEnv.OPENAI_AUTH_SCHEME === 'raw'
       ? processEnv.OPENAI_AUTH_SCHEME
       : undefined) ||
     (usePersistedOpenAIConfig ? persistedOpenAIAuthScheme : undefined)

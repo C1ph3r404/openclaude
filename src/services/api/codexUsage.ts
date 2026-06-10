@@ -38,16 +38,16 @@ export type CodexUsageData = {
 
 export type CodexUsageRow =
   | {
-      kind: 'window'
-      label: string
-      usedPercent: number
-      resetsAt?: string
-    }
+    kind: 'window'
+    label: string
+    usedPercent: number
+    resetsAt?: string
+  }
   | {
-      kind: 'text'
-      label: string
-      value: string
-    }
+    kind: 'text'
+    label: string
+    value: string
+  }
 
 type RecordLike = Record<string, unknown>
 

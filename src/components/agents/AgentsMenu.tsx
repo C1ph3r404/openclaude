@@ -22,6 +22,8 @@ import { AgentsList } from './AgentsList.js';
 import { deleteAgentFromFile } from './agentFileUtils.js';
 import { CreateAgentWizard } from './new-agent-creation/CreateAgentWizard.js';
 import type { ModeState } from './types.js';
+import { logForDebugging } from "src/utils/debug.js";
+import { setAgentType } from "src/services/api/browserLLMProvider.js";
 type Props = {
   tools: Tools;
   onExit: (result?: string, options?: {
@@ -344,7 +346,7 @@ export function AgentsMenu(t0) {
           label: "Back",
           value: "back"
         }];
-        const handleMenuSelect = value_0 => {
+        const handleMenuSelect = async value_0 => {
           bb129: switch (value_0) {
             case "view":
               {
@@ -362,6 +364,10 @@ export function AgentsMenu(t0) {
                 setModeState({
                   mode: "list-agents",
                   source: "all"
+                });
+                logForDebugging(`[AgentsMenu] Set active agent to ${sessionAgentToUse.agentType}`);
+                await setAgentType(sessionAgentToUse.agentType).catch(err => {
+                  logForDebugging('Failed to set agent type in BrowserLLM provider: ' + err);
                 });
                 break bb129;
               }

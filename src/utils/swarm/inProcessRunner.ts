@@ -544,7 +544,7 @@ function updateTaskState(
  * Sends a message to the leader's file-based mailbox.
  * Uses the same mailbox system as tmux teammates for consistency.
  */
-async function sendMessageToLeader(
+async function chatGPTMesgToLeader(
   from: string,
   text: string,
   color: string | undefined,
@@ -580,7 +580,7 @@ async function sendIdleNotification(
 ): Promise<void> {
   const notification = createIdleNotification(agentName, options)
 
-  await sendMessageToLeader(
+  await chatGPTMesgToLeader(
     agentName,
     jsonStringify(notification),
     agentColor,
@@ -661,20 +661,20 @@ async function tryClaimNextTask(
  */
 type WaitResult =
   | {
-      type: 'shutdown_request'
-      request: ReturnType<typeof isShutdownRequest>
-      originalMessage: string
-    }
+    type: 'shutdown_request'
+    request: ReturnType<typeof isShutdownRequest>
+    originalMessage: string
+  }
   | {
-      type: 'new_message'
-      message: string
-      from: string
-      color?: string
-      summary?: string
-    }
+    type: 'new_message'
+    message: string
+    from: string
+    color?: string
+    summary?: string
+  }
   | {
-      type: 'aborted'
-    }
+    type: 'aborted'
+  }
 
 /**
  * Waits for new prompts or shutdown request.
@@ -949,9 +949,9 @@ export async function runInProcessTeammate(
         logEvent('tengu_agent_memory_loaded', {
           ...(process.env.USER_TYPE === 'ant'
             ? {
-                agent_type:
-                  agentDefinition.agentType as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-              }
+              agent_type:
+                agentDefinition.agentType as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+            }
             : {}),
           scope:
             agentDefinition.memory as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -981,17 +981,17 @@ export async function runInProcessTeammate(
     // even with explicit tool lists
     tools: agentDefinition?.tools
       ? [
-          ...new Set([
-            ...agentDefinition.tools,
-            SEND_MESSAGE_TOOL_NAME,
-            TEAM_CREATE_TOOL_NAME,
-            TEAM_DELETE_TOOL_NAME,
-            TASK_CREATE_TOOL_NAME,
-            TASK_GET_TOOL_NAME,
-            TASK_LIST_TOOL_NAME,
-            TASK_UPDATE_TOOL_NAME,
-          ]),
-        ]
+        ...new Set([
+          ...agentDefinition.tools,
+          SEND_MESSAGE_TOOL_NAME,
+          TEAM_CREATE_TOOL_NAME,
+          TEAM_DELETE_TOOL_NAME,
+          TASK_CREATE_TOOL_NAME,
+          TASK_GET_TOOL_NAME,
+          TASK_LIST_TOOL_NAME,
+          TASK_UPDATE_TOOL_NAME,
+        ]),
+      ]
       : ['*'],
     source: 'projectSettings',
     permissionMode: 'default',

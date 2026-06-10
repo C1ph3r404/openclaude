@@ -79,14 +79,14 @@ function getModelListUrls(baseUrl: string): string[] {
   const addApiVersion =
     apiVersion && isAzureOpenAIBaseUrl(baseUrl)
       ? (url: string): string => {
-          try {
-            const parsed = new URL(url)
-            parsed.searchParams.set('api-version', apiVersion)
-            return parsed.toString()
-          } catch {
-            return url
-          }
+        try {
+          const parsed = new URL(url)
+          parsed.searchParams.set('api-version', apiVersion)
+          return parsed.toString()
+        } catch {
+          return url
         }
+      }
       : (url: string): string => url
 
   if (primary === secondary) {

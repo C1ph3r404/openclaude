@@ -208,7 +208,7 @@ export class CodexOAuthService {
   private port: number | null = null
   private tokenExchangeAbortController: AbortController | null = null
 
-  constructor(private readonly options: CodexOAuthServiceOptions = {}) {}
+  constructor(private readonly options: CodexOAuthServiceOptions = {}) { }
 
   private buildCancellationError(): Error {
     return new Error('Codex OAuth flow was cancelled.')
@@ -301,10 +301,10 @@ export class CodexOAuthService {
               isCancellation
                 ? renderCancelledPage()
                 : renderErrorPage(
-                    resolvedError instanceof Error
-                      ? resolvedError.message
-                      : String(resolvedError),
-                  ),
+                  resolvedError instanceof Error
+                    ? resolvedError.message
+                    : String(resolvedError),
+                ),
             )
           })
         }

@@ -12,7 +12,7 @@ import { join } from 'path'
 import { z } from 'zod/v4'
 import { TEAMMATE_MESSAGE_TAG } from '../constants/xml.js'
 import { PermissionModeSchema } from '../entrypoints/sdk/coreSchemas.js'
-import { SEND_MESSAGE_TOOL_NAME } from '../tools/SendMessageTool/constants.js'
+import { SEND_MESSAGE_TOOL_NAME } from 'src/tools/SendMessageTool/constants.js'
 import type { Message } from '../types/message.js'
 import { generateRequestId } from './agentId.js'
 import { count } from './array.js'
@@ -467,20 +467,20 @@ export type PermissionRequestMessage = {
  */
 export type PermissionResponseMessage =
   | {
-      type: 'permission_response'
-      request_id: string
-      subtype: 'success'
-      response?: {
-        updated_input?: Record<string, unknown>
-        permission_updates?: unknown[]
-      }
+    type: 'permission_response'
+    request_id: string
+    subtype: 'success'
+    response?: {
+      updated_input?: Record<string, unknown>
+      permission_updates?: unknown[]
     }
+  }
   | {
-      type: 'permission_response'
-      request_id: string
-      subtype: 'error'
-      error: string
-    }
+    type: 'permission_response'
+    request_id: string
+    subtype: 'error'
+    error: string
+  }
 
 /**
  * Creates a permission request message to send to the team leader
@@ -1143,7 +1143,7 @@ export async function markMessagesAsReadByPredicate(
 
 /**
  * Extracts a "[to {name}] {summary}" string from the last assistant message
- * if it ended with a SendMessage tool_use targeting a peer (not the team lead).
+ * if it ended with a chatGPTMesg tool_use targeting a peer (not the team lead).
  * Returns undefined when the turn didn't end with a peer DM.
  */
 export function getLastPeerDmSummary(messages: Message[]): string | undefined {

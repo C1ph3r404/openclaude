@@ -139,8 +139,8 @@ function baseUrlMatchesDescriptor(
 
   return Boolean(
     normalizedBaseUrl &&
-      normalizedDescriptorBaseUrl &&
-      normalizedBaseUrl === normalizedDescriptorBaseUrl,
+    normalizedDescriptorBaseUrl &&
+    normalizedBaseUrl === normalizedDescriptorBaseUrl,
   )
 }
 

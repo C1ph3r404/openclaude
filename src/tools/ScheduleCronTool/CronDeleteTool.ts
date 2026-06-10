@@ -35,6 +35,9 @@ export type DeleteOutput = z.infer<OutputSchema>
 export const CronDeleteTool = buildTool({
   name: CRON_DELETE_TOOL_NAME,
   searchHint: 'cancel a scheduled cron job',
+  parameterAliases: {
+    id: ['jobId', 'job_id'],
+  },
   maxResultSizeChars: 100_000,
   shouldDefer: true,
   get inputSchema(): InputSchema {

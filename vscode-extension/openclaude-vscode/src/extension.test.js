@@ -60,7 +60,7 @@ function loadExtension() {
     window: {
       activeTextEditor: null,
       createWebviewPanel: () => ({}),
-      registerWebviewViewProvider: () => ({ dispose() {} }),
+      registerWebviewViewProvider: () => ({ dispose() { } }),
       showInformationMessage: async () => undefined,
       showErrorMessage: async () => undefined,
     },
@@ -68,7 +68,7 @@ function loadExtension() {
       openExternal: async () => true,
     },
     commands: {
-      registerCommand: () => ({ dispose() {} }),
+      registerCommand: () => ({ dispose() { } }),
       executeCommand: async () => undefined,
     },
     Uri: { parse: value => value, file: value => value },

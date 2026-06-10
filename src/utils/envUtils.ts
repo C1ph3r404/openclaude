@@ -7,6 +7,7 @@ import {
   readdirSync,
   statSync,
   symlinkSync,
+  existsSync,
 } from 'fs'
 import { homedir } from 'os'
 import { dirname, join } from 'path'
@@ -162,6 +163,33 @@ export function setClaudeConfigHomeDirForTesting(
   configDir: string | undefined,
 ): void {
   claudeConfigHomeDirOverride = configDir?.normalize('NFC')
+}
+
+export function resolveClaudeConfigHomeDir(options?: {
+  configDirEnv?: string
+  homeDir?: string
+  openClaudeExists?: boolean
+  legacyClaudeExists?: boolean
+}): string {
+  if (options?.configDirEnv) {
+    return options.configDirEnv.normalize('NFC')
+  }
+
+  const homeDir = options?.homeDir ?? homedir()
+  const openClaudeDir = join(homeDir, '.openclaude')
+  const legacyClaudeDir = join(homeDir, '.claude')
+  const openClaudeExists =
+    options?.openClaudeExists ?? existsSync(openClaudeDir)
+  const legacyClaudeExists =
+    options?.legacyClaudeExists ?? existsSync(legacyClaudeDir)
+
+  // Preserve existing user config/install state until we ship an explicit
+  // migration. New installs (neither path exists) use ~/.openclaude.
+  if (!openClaudeExists && legacyClaudeExists) {
+    return legacyClaudeDir.normalize('NFC')
+  }
+
+  return openClaudeDir.normalize('NFC')
 }
 
 // Memoized: 150+ callers, many on hot paths. Keyed off CLAUDE_CONFIG_DIR so

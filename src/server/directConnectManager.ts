@@ -122,7 +122,7 @@ export class DirectConnectSessionManager {
     })
   }
 
-  sendMessage(content: RemoteMessageContent): boolean {
+  chatGPTMesg(content: RemoteMessageContent): boolean {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       return false
     }

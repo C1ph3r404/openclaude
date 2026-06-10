@@ -133,10 +133,10 @@ export function buildIDEProperties(mcpClients: MCPServerConnection[], ideInstall
       return [{
         label: 'IDE',
         value: <Text>
-              {color('error', theme)(figures.cross)} Error installing {ideName}{' '}
-              {pluginOrExtension}: {ideInstallationStatus.error}
-              {'\n'}Please restart your IDE and try again.
-            </Text>
+          {color('error', theme)(figures.cross)} Error installing {ideName}{' '}
+          {pluginOrExtension}: {ideInstallationStatus.error}
+          {'\n'}Please restart your IDE and try again.
+        </Text>
       }];
     }
     if (ideInstallationStatus.installed) {
@@ -190,7 +190,7 @@ export function buildMcpProperties(clients: MCPServerConnection[] = [], theme: T
     failed: 0
   };
   for (const s of servers) {
-    if (s.type === 'connected') byState.connected++;else if (s.type === 'pending') byState.pending++;else if (s.type === 'needs-auth') byState.needsAuth++;else byState.failed++;
+    if (s.type === 'connected') byState.connected++; else if (s.type === 'pending') byState.pending++; else if (s.type === 'needs-auth') byState.needsAuth++; else byState.failed++;
   }
   const parts: string[] = [];
   if (byState.connected) parts.push(color('success', theme)(`${byState.connected} connected`));

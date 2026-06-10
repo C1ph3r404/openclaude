@@ -56,7 +56,7 @@ type UseRemoteSessionProps = {
 
 type UseRemoteSessionResult = {
   isRemoteMode: boolean
-  sendMessage: (
+  chatGPTMesg: (
     content: RemoteMessageContent,
     opts?: { uuid?: string },
   ) => Promise<boolean>
@@ -133,7 +133,7 @@ export function useRemoteSession({
   // bounded ring instead. Cap is generous: users don't type 50 messages
   // faster than echoes arrive.
   // NOTE: this does NOT dedup history-vs-live overlap at attach time (nothing
-  // seeds the set from history UUIDs; only sendMessage populates it).
+  // seeds the set from history UUIDs; only chatGPTMesg populates it).
   const sentUUIDsRef = useRef(new BoundedUUIDSet(50))
 
   // Keep a ref to tools so the WebSocket callback doesn't go stale
@@ -469,7 +469,7 @@ export function useRemoteSession({
   ])
 
   // Send a user message to the remote session
-  const sendMessage = useCallback(
+  const chatGPTMesg = useCallback(
     async (
       content: RemoteMessageContent,
       opts?: { uuid?: string },
@@ -492,7 +492,7 @@ export function useRemoteSession({
       // before the POST promise resolves.
       if (opts?.uuid) sentUUIDsRef.current.add(opts.uuid)
 
-      const success = await manager.sendMessage(content, opts)
+      const success = await manager.chatGPTMesg(content, opts)
 
       if (!success) {
         // No need to undo the pre-POST add — BoundedUUIDSet's ring evicts it.
@@ -599,7 +599,7 @@ export function useRemoteSession({
   // memoization the fresh literal invalidates onSubmit on every REPL render,
   // which in turn churns PromptInput's props and downstream memoization.
   return useMemo(
-    () => ({ isRemoteMode, sendMessage, cancelRequest, disconnect }),
-    [isRemoteMode, sendMessage, cancelRequest, disconnect],
+    () => ({ isRemoteMode, chatGPTMesg, cancelRequest, disconnect }),
+    [isRemoteMode, chatGPTMesg, cancelRequest, disconnect],
   )
 }

@@ -5,4 +5,4 @@
  */
 
 /** No-op — nothing to shut down. */
-export function shutdownDatadog(): void {}
+export function shutdownDatadog(): void { }

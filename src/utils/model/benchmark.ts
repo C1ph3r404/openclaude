@@ -25,7 +25,7 @@ const TIMEOUT_MS = 30000
 function getBenchmarkEndpoint(): string | null {
   const provider = getAPIProvider()
   const baseUrl = process.env.OPENAI_BASE_URL
-  
+
   // Check for Ollama (local)
   if (baseUrl?.includes('localhost:11434') || baseUrl?.includes('localhost:11435')) {
     return `${baseUrl}/chat/completions`
@@ -53,7 +53,7 @@ export async function benchmarkModel(
 ): Promise<BenchmarkResult> {
   const endpoint = getBenchmarkEndpoint()
   const authHeader = getBenchmarkAuthHeader()
-  
+
   if (!endpoint || !authHeader) {
     return {
       model,
@@ -65,7 +65,7 @@ export async function benchmarkModel(
       error: 'Benchmark not supported for this provider',
     }
   }
-  
+
   const startTime = performance.now()
   let totalTokens = 0
   let firstTokenMs: number | null = null
@@ -190,7 +190,7 @@ export async function benchmarkMultipleModels(
 export function formatBenchmarkResults(results: BenchmarkResult[]): string {
   const header = 'Model'.padEnd(40) + 'TPS' + '  First Token' + '  Status'
   const divider = '-'.repeat(70)
-  
+
   const rows = results
     .sort((a, b) => b.tokensPerSecond - a.tokensPerSecond)
     .map(r => {

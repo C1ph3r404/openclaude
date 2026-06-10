@@ -64,8 +64,8 @@ const PROGRESS_THRESHOLD_MS = 2000; // Show background hint after 2 seconds
 
 // Check if background tasks are disabled at module load time
 const isBackgroundTasksDisabled =
-// eslint-disable-next-line custom-rules/no-process-env-top-level -- Intentional: schema must be defined at module load
-isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS);
+  // eslint-disable-next-line custom-rules/no-process-env-top-level -- Intentional: schema must be defined at module load
+  isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS);
 
 // Auto-background agent tasks after this many ms (0 = disabled)
 // Enabled by env var OR GrowthBook gate (checked lazily since GB may not be ready at module load)
@@ -91,7 +91,7 @@ const baseInputSchema = lazySchema(() => z.object({
 const fullInputSchema = lazySchema(() => {
   // Multi-agent parameters
   const multiAgentInputSchema = z.object({
-    name: z.string().optional().describe('Name for the spawned agent. Makes it addressable via SendMessage({to: name}) while running.'),
+    name: z.string().optional().describe('Name for the spawned agent. Makes it addressable via chatGPTMesg({to: name}) while running.'),
     team_name: z.string().optional().describe('Team name for spawning. Uses current team context if omitted.'),
     mode: permissionModeSchema().optional().describe('Permission mode for spawned teammate (e.g., "plan" to require plan approval).')
   });
@@ -226,6 +226,12 @@ export const AgentTool = buildTool({
   name: AGENT_TOOL_NAME,
   searchHint: 'delegate work to a subagent',
   aliases: [LEGACY_AGENT_TOOL_NAME],
+  parameterAliases: {
+    description: ['task'],
+    prompt: ['instruction'],
+    subagent_type: ['agentType', 'type'],
+    run_in_background: ['background', 'async'],
+  },
   maxResultSizeChars: 100_000,
   async description() {
     return 'Launch a new agent';
@@ -292,11 +298,11 @@ export const AgentTool = buildTool({
         rawTeammateModel === undefined
           ? undefined
           : getAgentModel(
-              agentDef?.model,
-              toolUseContext.options.mainLoopModel,
-              model,
-              permissionMode
-            );
+            agentDef?.model,
+            toolUseContext.options.mainLoopModel,
+            model,
+            permissionMode
+          );
       const result = await spawnTeammate({
         name,
         prompt,
@@ -350,8 +356,8 @@ export const AgentTool = buildTool({
         allowedAgentTypes
       } = toolUseContext.options.agentDefinitions;
       const agents = filterDeniedAgents(
-      // When allowedAgentTypes is set (from Agent(x,y) tool spec), restrict to those types
-      allowedAgentTypes ? allAgents.filter(a => allowedAgentTypes.includes(a.agentType)) : allAgents, appState.toolPermissionContext, AGENT_TOOL_NAME);
+        // When allowedAgentTypes is set (from Agent(x,y) tool spec), restrict to those types
+        allowedAgentTypes ? allAgents.filter(a => allowedAgentTypes.includes(a.agentType)) : allAgents, appState.toolPermissionContext, AGENT_TOOL_NAME);
       const found = agents.find(agent => agent.agentType === effectiveType);
       if (!found) {
         // Check if the agent exists but is denied by permission rules
@@ -720,9 +726,9 @@ export const AgentTool = buildTool({
         toolUseId: toolUseContext.toolUseId
       });
 
-      // Register name → agentId for SendMessage routing. Post-registerAsyncAgent
+      // Register name → agentId for chatGPTMesg routing. Post-registerAsyncAgent
       // so we don't leave a stale entry if spawn fails. Sync agents skipped —
-      // coordinator is blocked, so SendMessage routing doesn't apply.
+      // coordinator is blocked, so chatGPTMesg routing doesn't apply.
       if (name) {
         rootSetAppState(prev => {
           const next = new Map(prev.agentNameRegistry);
@@ -938,7 +944,7 @@ export const AgentTool = buildTool({
                     // (releases MCP connections, session hooks, prompt cache tracking, etc.)
                     // Timeout prevents blocking if MCP server cleanup hangs.
                     // .catch() prevents unhandled rejection if timeout wins the race.
-                    await Promise.race([agentIterator.return(undefined).catch(() => {}), sleep(1000)]);
+                    await Promise.race([agentIterator.return(undefined).catch(() => { }), sleep(1000)]);
                     // Initialize progress tracking from existing messages
                     const tracker = createProgressTracker();
                     const resolveActivity2 = createActivityDescriptionResolver(toolUseContext.options.tools);
@@ -1350,8 +1356,8 @@ The agent is now running and will receive instructions via mailbox.`
       };
     }
     if (data.status === 'async_launched') {
-      const prefix = `Async agent launched successfully.\nagentId: ${data.agentId} (internal ID - do not mention to user. Use SendMessage with to: '${data.agentId}' to continue this agent.)\nThe agent is working in the background. You will be notified automatically when it completes.`;
-      const instructions = data.canReadOutputFile ? `Do not duplicate this agent's work — avoid working with the same files or topics it is using. Briefly tell the user what you launched and end your response — agent results will arrive in a subsequent message. You may continue first ONLY if you have other tasks on clearly different files that this agent is not touching.\noutput_file: ${data.outputFile}\nIf asked, you can check progress before completion by using ${FILE_READ_TOOL_NAME} or ${BASH_TOOL_NAME} tail on the output file.` : `Briefly tell the user what you launched and end your response. Do not generate any other text — agent results will arrive in a subsequent message.`;
+      const prefix = `Async agent launched successfully.\nagentId: ${data.agentId} (internal ID - do not mention to user. Use chatGPTMesg with to: '${data.agentId}' to continue this agent.)\nThe agent is working in the background. You will be notified automatically when it completes.`;
+      const instructions = data.canReadOutputFile ? `DO NOT DUPLICATE this agent's work, DO NOT SPAWN ANOTHER AGENT FOR SAME TASK — avoid working with the same files or topics it is using. Briefly tell the user what you launched and end your response.` : `Briefly tell the user what you launched and end your response. Do not generate any other text — agent results will arrive in a subsequent message.`;
       const text = `${prefix}\n${instructions}`;
       return {
         tool_use_id: toolUseID,
@@ -1373,7 +1379,7 @@ The agent is now running and will receive instructions via mailbox.`
         type: 'text' as const,
         text: '(Subagent completed but returned no output.)'
       }];
-      // One-shot built-ins (Explore, Plan) are never continued via SendMessage
+      // One-shot built-ins (Explore, Plan) are never continued via chatGPTMesg
       // — the agentId hint and <usage> block are dead weight (~135 chars ×
       // 34M Explore runs/week ≈ 1-2 Gtok/week). Telemetry doesn't parse this
       // block (it uses logEvent in finalizeAgentTool), so dropping is safe.
@@ -1390,7 +1396,7 @@ The agent is now running and will receive instructions via mailbox.`
         type: 'tool_result',
         content: [...contentOrMarker, {
           type: 'text',
-          text: `agentId: ${data.agentId} (use SendMessage with to: '${data.agentId}' to continue this agent)${worktreeInfoText}
+          text: `agentId: ${data.agentId} (use chatGPTMesg with to: '${data.agentId}' to continue this agent)${worktreeInfoText}
 <usage>total_tokens: ${data.totalTokens}
 tool_uses: ${data.totalToolUseCount}
 duration_ms: ${data.totalDurationMs}</usage>`

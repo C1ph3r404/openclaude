@@ -179,18 +179,18 @@ export function generateTmuxSessionName(
 
 type WorktreeCreateResult =
   | {
-      worktreePath: string
-      worktreeBranch: string
-      headCommit: string
-      existed: true
-    }
+    worktreePath: string
+    worktreeBranch: string
+    headCommit: string
+    existed: true
+  }
   | {
-      worktreePath: string
-      worktreeBranch: string
-      headCommit: string
-      baseBranch: string
-      existed: false
-    }
+    worktreePath: string
+    worktreeBranch: string
+    headCommit: string
+    baseBranch: string
+    existed: false
+  }
 
 const gitWorktreeMutationLocks = new Map<string, Promise<void>>()
 
@@ -203,10 +203,10 @@ export async function withGitWorktreeMutationLock<T>(
   const current = new Promise<void>(resolve => {
     releaseCurrent = resolve
   })
-  const next = previous.catch(() => {}).then(() => current)
+  const next = previous.catch(() => { }).then(() => current)
   gitWorktreeMutationLocks.set(repoRoot, next)
 
-  await previous.catch(() => {})
+  await previous.catch(() => { })
 
   try {
     return await fn()
@@ -794,7 +794,7 @@ export async function createWorktreeForSession(
     if (!gitRoot) {
       throw new Error(
         'Cannot create a worktree: not in a git repository and no WorktreeCreate hooks are configured. ' +
-          'Configure WorktreeCreate/WorktreeRemove hooks in settings.json to use worktree isolation with other VCS systems.',
+        'Configure WorktreeCreate/WorktreeRemove hooks in settings.json to use worktree isolation with other VCS systems.',
       )
     }
 
@@ -989,7 +989,7 @@ export async function createAgentWorktree(slug: string): Promise<{
   if (!gitRoot) {
     throw new Error(
       'Cannot create agent worktree: not in a git repository and no WorktreeCreate hooks are configured. ' +
-        'Configure WorktreeCreate/WorktreeRemove hooks in settings.json to use worktree isolation with other VCS systems.',
+      'Configure WorktreeCreate/WorktreeRemove hooks in settings.json to use worktree isolation with other VCS systems.',
     )
   }
 
@@ -1450,9 +1450,9 @@ export async function execIntoTmuxWorktree(args: string[]): Promise<{
     // biome-ignore lint/suspicious/noConsole: intentional user guidance
     console.log(
       `\n${y('╭─ iTerm2 Tip ────────────────────────────────────────────────────────╮')}\n` +
-        `${y('│')} To open as a tab instead of a new window:                           ${y('│')}\n` +
-        `${y('│')} iTerm2 > Settings > General > tmux > "Tabs in attaching window"     ${y('│')}\n` +
-        `${y('╰─────────────────────────────────────────────────────────────────────╯')}\n`,
+      `${y('│')} To open as a tab instead of a new window:                           ${y('│')}\n` +
+      `${y('│')} iTerm2 > Settings > General > tmux > "Tabs in attaching window"     ${y('│')}\n` +
+      `${y('╰─────────────────────────────────────────────────────────────────────╯')}\n`,
     )
   }
 

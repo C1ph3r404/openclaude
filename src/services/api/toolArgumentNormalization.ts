@@ -41,12 +41,22 @@ function wrapPlainStringToolArguments(
 
 export function normalizeToolArguments(
   toolName: string,
-  rawArguments: string | undefined,
+  rawArguments: string | undefined | Record<string, unknown>,
 ): unknown {
+  // If already an object, use it directly
+  if (typeof rawArguments === 'object' && rawArguments !== null && !Array.isArray(rawArguments)) {
+    return rawArguments
+  }
+
   if (rawArguments === undefined) return {}
 
+  // For logging/debugging
+  const isString = typeof rawArguments === 'string'
+  const argString = rawArguments as string
+
   try {
-    const parsed = JSON.parse(rawArguments)
+    // First, try parsing as-is
+    const parsed = JSON.parse(argString)
     if (isRecord(parsed)) {
       return parsed
     }
@@ -55,15 +65,30 @@ export function normalizeToolArguments(
       return wrapPlainStringToolArguments(toolName, parsed) ?? parsed
     }
     // For blank strings, booleans, null, arrays — pass through as-is
-    // and let Zod schema validation produce a meaningful error
     return parsed
-  } catch {
-    // rawArguments is not valid JSON — treat as a plain string
-    if (isBlankString(rawArguments) || isLikelyStructuredObjectLiteral(rawArguments)) {
-      // Blank or looks like a malformed object literal — don't wrap into
-      // a tool field to avoid turning garbage into executable input
-      return {}
+  } catch (e) {
+    // First parse failed - try unescaping the string before parsing
+    try {
+      // Unescape: replace \" with ", \\ with \, but preserve actual escape sequences
+      const unescaped = argString
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\')
+
+      const parsed = JSON.parse(unescaped)
+      if (isRecord(parsed)) {
+        return parsed
+      }
+      // Parsed as a non-object JSON value
+      if (typeof parsed === 'string' && !isBlankString(parsed)) {
+        return wrapPlainStringToolArguments(toolName, parsed) ?? parsed
+      }
+      return parsed
+    } catch (e2) {
+      // Both parse attempts failed - treat as plain string or return empty
+      if (isBlankString(argString) || isLikelyStructuredObjectLiteral(argString)) {
+        return {}
+      }
+      return wrapPlainStringToolArguments(toolName, argString) ?? {}
     }
-    return wrapPlainStringToolArguments(toolName, rawArguments) ?? {}
   }
 }

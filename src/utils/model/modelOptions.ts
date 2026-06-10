@@ -761,9 +761,9 @@ function filterModelOptionsByAllowlist(options: ModelOption[]): ModelOption[] {
   const filtered = !settings.availableModels
     ? options // No restrictions
     : options.filter(
-    opt =>
-      opt.value === null || (opt.value !== null && isModelAllowed(opt.value)),
-  )
+      opt =>
+        opt.value === null || (opt.value !== null && isModelAllowed(opt.value)),
+    )
 
   // Select state uses option values as identity keys. If two entries share the
   // same value (e.g. provider-specific aliases collapsing to one model ID),

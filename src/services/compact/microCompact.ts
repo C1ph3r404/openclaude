@@ -374,11 +374,11 @@ async function cachedMicrocompactPath(
     const baseline =
       lastAsst?.type === 'assistant'
         ? ((
-            lastAsst.message.usage as unknown as Record<
-              string,
-              number | undefined
-            >
-          )?.cache_deleted_input_tokens ?? 0)
+          lastAsst.message.usage as unknown as Record<
+            string,
+            number | undefined
+          >
+        )?.cache_deleted_input_tokens ?? 0)
         : 0
 
     return {

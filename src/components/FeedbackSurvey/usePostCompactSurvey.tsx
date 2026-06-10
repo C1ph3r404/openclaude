@@ -182,7 +182,7 @@ function _temp2(appearanceId_0, selected) {
     response: selected as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
     session_memory_compaction_enabled: smCompactionEnabled_0 as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   });
-  }
+}
 function _temp(appearanceId) {
   const smCompactionEnabled = shouldUseSessionMemoryCompaction();
   logEvent("tengu_post_compact_survey_event", {
@@ -190,4 +190,4 @@ function _temp(appearanceId) {
     appearance_id: appearanceId as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
     session_memory_compaction_enabled: smCompactionEnabled as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   });
-  }
+}

@@ -9,10 +9,10 @@ const { ProcessManager } = require('./processManager');
 const { toViewModel } = require('./messageParser');
 const { renderChatHtml } = require('./chatRenderer');
 const { isAssistantMessage, isPartialMessage, isStreamEvent,
-        isContentBlockDelta, isContentBlockStart, isMessageStart,
-        isResultMessage, isControlRequest, isToolProgressMessage,
-        isStatusMessage, isRateLimitEvent, getTextContent,
-        getToolUseBlocks } = require('./protocol');
+  isContentBlockDelta, isContentBlockStart, isMessageStart,
+  isResultMessage, isControlRequest, isToolProgressMessage,
+  isStatusMessage, isRateLimitEvent, getTextContent,
+  getToolUseBlocks } = require('./protocol');
 
 async function openFileInEditor(filePath) {
   try {
@@ -144,7 +144,7 @@ class ChatController {
     }
   }
 
-  async sendMessage(text) {
+  async chatGPTMesg(text) {
     // Keep the process alive for multi-turn — just send directly.
     // The CLI maintains full session state (tools, history) across turns.
     // Only start a new process if none exists or it died.
@@ -488,7 +488,7 @@ class OpenClaudeChatViewProvider {
     webview.onDidReceiveMessage(async (msg) => {
       switch (msg.type) {
         case 'send_message':
-          this._chatController.sendMessage(msg.text);
+          this._chatController.chatGPTMesg(msg.text);
           break;
         case 'abort':
           this._chatController.abort();
@@ -597,7 +597,7 @@ class OpenClaudeChatPanelManager {
     webview.onDidReceiveMessage(async (msg) => {
       switch (msg.type) {
         case 'send_message':
-          this._chatController.sendMessage(msg.text);
+          this._chatController.chatGPTMesg(msg.text);
           break;
         case 'abort':
           this._chatController.abort();

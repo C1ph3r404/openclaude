@@ -219,22 +219,22 @@ function AnthropicUsage(): React.ReactNode {
   });
   if (error) {
     return <Box flexDirection="column" gap={1}>
-        <Text color="error">Error: {error}</Text>
-        <Text dimColor>
-          <Byline>
-            <ConfigurableShortcutHint action="settings:retry" context="Settings" fallback="r" description="retry" />
-            <ConfigurableShortcutHint action="confirm:no" context="Settings" fallback="Esc" description="cancel" />
-          </Byline>
-        </Text>
-      </Box>;
+      <Text color="error">Error: {error}</Text>
+      <Text dimColor>
+        <Byline>
+          <ConfigurableShortcutHint action="settings:retry" context="Settings" fallback="r" description="retry" />
+          <ConfigurableShortcutHint action="confirm:no" context="Settings" fallback="Esc" description="cancel" />
+        </Byline>
+      </Text>
+    </Box>;
   }
   if (!utilization) {
     return <Box flexDirection="column" gap={1}>
-        <Text dimColor>Loading usage data…</Text>
-        <Text dimColor>
-          <ConfigurableShortcutHint action="confirm:no" context="Settings" fallback="Esc" description="cancel" />
-        </Text>
-      </Box>;
+      <Text dimColor>Loading usage data…</Text>
+      <Text dimColor>
+        <ConfigurableShortcutHint action="confirm:no" context="Settings" fallback="Esc" description="cancel" />
+      </Text>
+    </Box>;
   }
 
   // Only Max and Team plans have a Sonnet limit that differs from the weekly
@@ -254,23 +254,23 @@ function AnthropicUsage(): React.ReactNode {
     limit: utilization.seven_day_sonnet
   }] : [])];
   return <Box flexDirection="column" gap={1} width="100%">
-      {limits.some(({
+    {limits.some(({
       limit
     }) => limit) || <Text dimColor>/usage is only available for subscription plans.</Text>}
 
-      {limits.map(({
+    {limits.map(({
       title,
       limit: limit_0
     }) => limit_0 && <LimitBar key={title} title={title} limit={limit_0} maxWidth={maxWidth} />)}
 
-      {utilization.extra_usage && <ExtraUsageSection extraUsage={utilization.extra_usage} maxWidth={maxWidth} />}
+    {utilization.extra_usage && <ExtraUsageSection extraUsage={utilization.extra_usage} maxWidth={maxWidth} />}
 
-      {isEligibleForOverageCreditGrant() && <OverageCreditUpsell maxWidth={maxWidth} />}
+    {isEligibleForOverageCreditGrant() && <OverageCreditUpsell maxWidth={maxWidth} />}
 
-      <Text dimColor>
-        <ConfigurableShortcutHint action="confirm:no" context="Settings" fallback="Esc" description="cancel" />
-      </Text>
-    </Box>;
+    <Text dimColor>
+      <ConfigurableShortcutHint action="confirm:no" context="Settings" fallback="Esc" description="cancel" />
+    </Text>
+  </Box>;
 }
 export function Usage(): React.ReactNode {
   const provider = getAPIProvider();

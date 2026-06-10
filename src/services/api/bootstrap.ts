@@ -167,10 +167,10 @@ async function fetchLocalOpenAIModelOptions(): Promise<BootstrapCachePayload | n
 
   const discovered = routeId
     ? await discoverModelsForRoute(routeId, {
-        baseUrl,
-        apiKey,
-        headers: parseCustomHeadersEnv(process.env.ANTHROPIC_CUSTOM_HEADERS),
-      })
+      baseUrl,
+      apiKey,
+      headers: parseCustomHeadersEnv(process.env.ANTHROPIC_CUSTOM_HEADERS),
+    })
     : null
   const models =
     (discovered && discovered.source !== 'error'

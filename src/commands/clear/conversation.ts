@@ -14,6 +14,7 @@ import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   logEvent,
 } from '../../services/analytics/index.js'
+import { deleteChat, isBrowserLLMProvider, getCurrentChatId } from '../../services/api/browserLLMProvider.js'
 import type { AppState } from '../../state/AppState.js'
 import { isInProcessTeammateTask } from '../../tasks/InProcessTeammateTask/types.js'
 import {
@@ -45,6 +46,7 @@ import {
   initTaskOutputAsSymlink,
 } from '../../utils/task/diskOutput.js'
 import { getCurrentWorktreeSession } from '../../utils/worktree.js'
+import { updateSessionName } from '../../utils/concurrentSessions.js'
 import { clearSessionCaches } from './caches.js'
 
 export async function clearConversation({
@@ -55,6 +57,7 @@ export async function clearConversation({
   getAppState,
   setAppState,
   setConversationId,
+  skipBrowserLLMDelete = false,
 }: {
   setMessages: (updater: (prev: Message[]) => Message[]) => void
   readFileState: FileStateCache
@@ -63,7 +66,21 @@ export async function clearConversation({
   getAppState?: () => AppState
   setAppState?: (f: (prev: AppState) => AppState) => void
   setConversationId?: (id: UUID) => void
+  skipBrowserLLMDelete?: boolean
 }): Promise<void> {
+  // If using BrowserLLM, call delete-chat endpoint and use chatID as session name
+  // (unless explicitly skipped, e.g., when /new already created a new chat)
+  if (isBrowserLLMProvider() && !skipBrowserLLMDelete) {
+    try {
+      const result = await deleteChat()
+      if (!result.success) {
+        logError(`Failed to delete BrowserLLM chat: ${result.error}`)
+      }
+    } catch (error) {
+      logError(error)
+    }
+  }
+
   // Execute SessionEnd hooks before clearing (bounded by
   // CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS, default 1.5s)
   const sessionEndTimeoutMs = getSessionEndHookTimeoutMs()

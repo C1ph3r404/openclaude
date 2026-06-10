@@ -7,7 +7,7 @@ import {
   releaseSharedMutationLock,
 } from '../../src/test/sharedMutationLock.js'
 
-// sendMessage drains trigger init(), which checks auth. Stub it for CI.
+// chatGPTMesg drains trigger init(), which checks auth. Stub it for CI.
 const AUTH_KEY = 'ANTHROPIC_API_KEY'
 let savedApiKey: string | undefined
 

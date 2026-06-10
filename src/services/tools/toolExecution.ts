@@ -71,6 +71,10 @@ import {
 import { executePermissionDeniedHooks } from '../../utils/hooks.js'
 import { logError } from '../../utils/log.js'
 import {
+  buildReverseAliasMap,
+  normalizeAliasedInput,
+} from '../../utils/parameterAliases.js'
+import {
   CANCEL_MESSAGE,
   createProgressMessage,
   createStopHookSummaryMessage,
@@ -848,7 +852,7 @@ async function checkPermissionsAndCallTool(
   }
 
   // Backfill legacy/derived fields on a shallow clone so hooks/canUseTool see
-  // them without affecting tool.call(). SendMessageTool adds fields; file
+  // them without affecting tool.call(). chatGPTMesgTool adds fields; file
   // tools overwrite file_path with expandPath — that mutation must not reach
   // call() because tool results embed the input path verbatim (e.g. "File
   // created successfully at: {path}"), and changing it alters the serialized
@@ -858,8 +862,8 @@ async function checkPermissionsAndCallTool(
   let callInput = processedInput
   const backfilledClone =
     tool.backfillObservableInput &&
-    typeof processedInput === 'object' &&
-    processedInput !== null
+      typeof processedInput === 'object' &&
+      processedInput !== null
       ? ({ ...processedInput } as typeof processedInput)
       : null
   if (backfilledClone) {
@@ -1008,7 +1012,7 @@ async function checkPermissionsAndCallTool(
   ) {
     logForDebugging(
       `Slow permission decision: ${permissionDurationMs}ms for ${tool.name} ` +
-        `(mode=${permissionMode}, behavior=${permissionDecision.behavior})`,
+      `(mode=${permissionMode}, behavior=${permissionDecision.behavior})`,
       { level: 'info' },
     )
   }
@@ -1240,7 +1244,7 @@ async function checkPermissionsAndCallTool(
     'file_path' in processedInput &&
     'file_path' in (callInput as Record<string, unknown>) &&
     (processedInput as Record<string, unknown>).file_path ===
-      (backfilledClone as Record<string, unknown>).file_path
+    (backfilledClone as Record<string, unknown>).file_path
   ) {
     callInput = {
       ...processedInput,
@@ -1372,7 +1376,7 @@ async function checkPermissionsAndCallTool(
       ? getMcpServerScopeFromToolName(tool.name)
       : null
 
-    
+
     // Run PostToolUse hooks
     let toolOutput = result.data
     const hookResults = []
@@ -1387,10 +1391,10 @@ async function checkPermissionsAndCallTool(
       // don't modify the output), otherwise map from scratch.
       const toolResultBlock = preMappedBlock
         ? await processPreMappedToolResultBlock(
-            preMappedBlock,
-            tool.name,
-            tool.maxResultSizeChars,
-          )
+          preMappedBlock,
+          tool.name,
+          tool.maxResultSizeChars,
+        )
         : await processToolResultBlock(tool, toolUseResult, toolUseID)
 
       // Build content blocks - tool result first, then optional feedback
@@ -1445,9 +1449,9 @@ async function checkPermissionsAndCallTool(
         }),
         contextModifier: toolContextModifier
           ? {
-              toolUseID: toolUseID,
-              modifyContext: toolContextModifier,
-            }
+            toolUseID: toolUseID,
+            modifyContext: toolContextModifier,
+          }
           : undefined,
       })
     }
@@ -1644,7 +1648,7 @@ async function checkPermissionsAndCallTool(
         ? getMcpServerScopeFromToolName(tool.name)
         : null
 
-          }
+    }
     const content = formatError(error)
 
     // Determine if this was a user interrupt
@@ -1694,7 +1698,7 @@ async function checkPermissionsAndCallTool(
           mcpMeta: toolUseContext.agentId
             ? undefined
             : error instanceof
-                McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+              McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
               ? error.mcpMeta
               : undefined,
           sourceToolAssistantUUID: assistantMessage.uuid,

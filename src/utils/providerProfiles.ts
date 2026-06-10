@@ -533,20 +533,20 @@ function isProcessEnvAlignedWithProfile(
       sameOptionalEnvValue(processEnv.OPENAI_API_KEY, profile.apiKey)) &&
     (profile.baseUrl?.toLowerCase().includes('bankr')
       ? !includeApiKey ||
-        sameOptionalEnvValue(processEnv.BNKR_API_KEY, profile.apiKey)
+      sameOptionalEnvValue(processEnv.BNKR_API_KEY, profile.apiKey)
       : true) &&
     (profile.baseUrl?.toLowerCase().includes('x.ai')
       ? !includeApiKey ||
-        sameOptionalEnvValue(processEnv.XAI_API_KEY, profile.apiKey)
+      sameOptionalEnvValue(processEnv.XAI_API_KEY, profile.apiKey)
       : true) &&
     (profile.baseUrl?.toLowerCase().includes('api.venice.ai')
       ? !includeApiKey ||
-        sameOptionalEnvValue(processEnv.VENICE_API_KEY, profile.apiKey)
+      sameOptionalEnvValue(processEnv.VENICE_API_KEY, profile.apiKey)
       : true) &&
     (profile.baseUrl?.toLowerCase().includes('api.xiaomimimo.com') ||
       profile.baseUrl?.toLowerCase().includes('api.mimo-v2.com')
       ? !includeApiKey ||
-        sameOptionalEnvValue(processEnv.MIMO_API_KEY, profile.apiKey)
+      sameOptionalEnvValue(processEnv.MIMO_API_KEY, profile.apiKey)
       : true)
   )
 }
@@ -1256,15 +1256,15 @@ export function deleteProviderProfile(profileId: string): {
       openaiAdditionalModelOptionsCacheByProfile: cacheByProfile,
       openaiAdditionalModelOptionsCache: nextActiveId
         ? (
-            nextActiveProfile
-              ? getProfileModelOptions(nextActiveProfile, {
-                  ...current,
-                  providerProfiles: nextProfiles,
-                  activeProviderProfileId: nextActiveId,
-                  openaiAdditionalModelOptionsCacheByProfile: cacheByProfile,
-                })
-              : []
-          )
+          nextActiveProfile
+            ? getProfileModelOptions(nextActiveProfile, {
+              ...current,
+              providerProfiles: nextProfiles,
+              activeProviderProfileId: nextActiveId,
+              openaiAdditionalModelOptionsCacheByProfile: cacheByProfile,
+            })
+            : []
+        )
         : [],
     }
   })

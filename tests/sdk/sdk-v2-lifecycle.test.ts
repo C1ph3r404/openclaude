@@ -29,7 +29,7 @@ import {
   UUID_REGEX,
 } from './helpers/query-test-doubles.js'
 
-// sendMessage drains trigger init(), which checks auth. Stub it for CI.
+// chatGPTMesg drains trigger init(), which checks auth. Stub it for CI.
 const AUTH_KEY = 'ANTHROPIC_API_KEY'
 let savedApiKey: string | undefined
 let originalSessionId: SessionId
@@ -60,7 +60,7 @@ afterEach(() => {
   setCwdState(originalCwd)
   setOriginalCwd(originalOriginalCwd)
   for (const dir of tempDirs) {
-    try { rmSync(dir, { recursive: true, force: true }) } catch {}
+    try { rmSync(dir, { recursive: true, force: true }) } catch { }
   }
   tempDirs.length = 0
 })
@@ -122,7 +122,7 @@ describe('V2: session interrupt', () => {
     ac.abort()
     let caught = false
     try {
-      for await (const _ of session.sendMessage('test')) {
+      for await (const _ of session.chatGPTMesg('test')) {
         // drain
       }
     } catch {

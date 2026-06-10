@@ -68,6 +68,7 @@ import {
   resolveRuntimeCodexCredentials,
   resolveProviderRequest,
   shouldAttemptLocalToollessRetry,
+  GITHUB_COPILOT_BASE_URL,
   type LocalFastPathConfig,
 } from './providerConfig.js'
 import {
@@ -1000,7 +1001,7 @@ function repairPossiblyTruncatedObjectJson(raw: string): string | null {
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
           return repaired
         }
-      } catch {}
+      } catch { }
     }
     return null
   }
@@ -1198,349 +1199,151 @@ async function* openaiStreamToAnthropic(
       buffer = lines.pop() ?? ''
 
       for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed === 'data: [DONE]') continue
-      if (!trimmed.startsWith('data: ')) continue
+        const trimmed = line.trim()
+        if (!trimmed || trimmed === 'data: [DONE]') continue
+        if (!trimmed.startsWith('data: ')) continue
 
-      let chunk: OpenAIStreamChunk
-      try {
-        chunk = JSON.parse(trimmed.slice(6))
-      } catch {
-        continue
-      }
+        let chunk: OpenAIStreamChunk
+        try {
+          chunk = JSON.parse(trimmed.slice(6))
+        } catch {
+          continue
+        }
 
-      // In-stream error event. Used by OpenAI when a stream fails after
-      // headers have been sent, and by intermediaries (e.g. gateways) that
-      // want to signal a structured failure without dropping the TCP
-      // connection. Surface it as an APIError so callers see a clean
-      // message instead of "stream ended without [DONE]".
-      const inStreamError = (chunk as unknown as { error?: { message?: string; type?: string; code?: string } }).error
-      if (inStreamError && typeof inStreamError === 'object') {
-        const message =
-          typeof inStreamError.message === 'string'
-            ? inStreamError.message
-            : 'Provider returned an in-stream error'
-        const errorPayload = {
-          error: {
+        // In-stream error event. Used by OpenAI when a stream fails after
+        // headers have been sent, and by intermediaries (e.g. gateways) that
+        // want to signal a structured failure without dropping the TCP
+        // connection. Surface it as an APIError so callers see a clean
+        // message instead of "stream ended without [DONE]".
+        const inStreamError = (chunk as unknown as { error?: { message?: string; type?: string; code?: string } }).error
+        if (inStreamError && typeof inStreamError === 'object') {
+          const message =
+            typeof inStreamError.message === 'string'
+              ? inStreamError.message
+              : 'Provider returned an in-stream error'
+          const errorPayload = {
+            error: {
+              message,
+              type: inStreamError.type ?? 'api_error',
+              code: inStreamError.code ?? null,
+            },
+          }
+          throw APIError.generate(
+            (response.status ?? 200) as number,
+            errorPayload,
             message,
-            type: inStreamError.type ?? 'api_error',
-            code: inStreamError.code ?? null,
-          },
+            response.headers as unknown as Headers,
+          )
         }
-        throw APIError.generate(
-          (response.status ?? 200) as number,
-          errorPayload,
-          message,
-          response.headers as unknown as Headers,
-        )
-      }
 
-      const chunkUsage = convertChunkUsage(chunk.usage)
+        const chunkUsage = convertChunkUsage(chunk.usage)
 
-      for (const choice of chunk.choices ?? []) {
-        const delta = choice.delta
+        for (const choice of chunk.choices ?? []) {
+          const delta = choice.delta
 
-        // Reasoning models (e.g. GLM-5, DeepSeek) may stream chain-of-thought
-        // in `reasoning_content` before the actual reply appears in `content`.
-        // Emit reasoning as a thinking block and content as a text block.
-        if (delta.reasoning_content != null && delta.reasoning_content !== '') {
-          if (!hasEmittedThinkingStart) {
-            yield {
-              type: 'content_block_start',
-              index: contentBlockIndex,
-              content_block: { type: 'thinking', thinking: '' },
+          // Reasoning models (e.g. GLM-5, DeepSeek) may stream chain-of-thought
+          // in `reasoning_content` before the actual reply appears in `content`.
+          // Emit reasoning as a thinking block and content as a text block.
+          if (delta.reasoning_content != null && delta.reasoning_content !== '') {
+            if (!hasEmittedThinkingStart) {
+              yield {
+                type: 'content_block_start',
+                index: contentBlockIndex,
+                content_block: { type: 'thinking', thinking: '' },
+              }
+              hasEmittedThinkingStart = true
             }
-            hasEmittedThinkingStart = true
-          }
-          yield {
-            type: 'content_block_delta',
-            index: contentBlockIndex,
-            delta: { type: 'thinking_delta', thinking: delta.reasoning_content },
-          }
-        }
-
-        // Text content — use != null to distinguish absent field from empty string,
-        // some providers send "" as first delta to signal streaming start
-        if (delta.content != null && delta.content !== '') {
-          // Close thinking block if transitioning from reasoning to content
-          if (hasEmittedThinkingStart && !hasClosedThinking) {
-            yield { type: 'content_block_stop', index: contentBlockIndex }
-            contentBlockIndex++
-            hasClosedThinking = true
+            yield {
+              type: 'content_block_delta',
+              index: contentBlockIndex,
+              delta: { type: 'thinking_delta', thinking: delta.reasoning_content },
+            }
           }
 
-          if (
-            !hasEmittedContentStart &&
-            bufferedRawToolCallsText === null &&
-            couldBeRawToolCallsRequestedPrefix(delta.content)
-          ) {
-            bufferedRawToolCallsText = delta.content
-            processStreamChunk(streamState, delta.content)
-          } else if (bufferedRawToolCallsText !== null) {
-            bufferedRawToolCallsText += delta.content
-            processStreamChunk(streamState, delta.content)
-            if (!couldBeRawToolCallsRequestedPrefix(bufferedRawToolCallsText)) {
-              yield* emitTextDelta(bufferedRawToolCallsText)
+          // Text content — use != null to distinguish absent field from empty string,
+          // some providers send "" as first delta to signal streaming start
+          if (delta.content != null && delta.content !== '') {
+            // Close thinking block if transitioning from reasoning to content
+            if (hasEmittedThinkingStart && !hasClosedThinking) {
+              yield { type: 'content_block_stop', index: contentBlockIndex }
+              contentBlockIndex++
+              hasClosedThinking = true
+            }
+
+            if (
+              !hasEmittedContentStart &&
+              bufferedRawToolCallsText === null &&
+              couldBeRawToolCallsRequestedPrefix(delta.content)
+            ) {
+              bufferedRawToolCallsText = delta.content
+              processStreamChunk(streamState, delta.content)
+            } else if (bufferedRawToolCallsText !== null) {
+              bufferedRawToolCallsText += delta.content
+              processStreamChunk(streamState, delta.content)
+              if (!couldBeRawToolCallsRequestedPrefix(bufferedRawToolCallsText)) {
+                yield* emitTextDelta(bufferedRawToolCallsText)
+                bufferedRawToolCallsText = null
+              }
+            } else {
+              yield* emitTextDelta(delta.content)
+            }
+          }
+
+          // Tool calls
+          if (delta.tool_calls) {
+            if (bufferedRawToolCallsText !== null) {
+              const parsedBufferedToolCalls = parseRawToolCallsRequestedText(
+                bufferedRawToolCallsText,
+              )
+              if (
+                !parsedBufferedToolCalls &&
+                !couldBeRawToolCallsRequestedPrefix(bufferedRawToolCallsText)
+              ) {
+                yield* emitTextDelta(bufferedRawToolCallsText)
+              }
               bufferedRawToolCallsText = null
             }
-          } else {
-            yield* emitTextDelta(delta.content)
-          }
-        }
+            for (const tc of delta.tool_calls) {
+              if (tc.id && tc.function?.name) {
+                // New tool call starting — close any open thinking block first
+                if (hasEmittedThinkingStart && !hasClosedThinking) {
+                  yield { type: 'content_block_stop', index: contentBlockIndex }
+                  contentBlockIndex++
+                  hasClosedThinking = true
+                }
+                if (hasEmittedContentStart) {
+                  yield* closeActiveContentBlock()
+                }
 
-        // Tool calls
-        if (delta.tool_calls) {
-          if (bufferedRawToolCallsText !== null) {
-            const parsedBufferedToolCalls = parseRawToolCallsRequestedText(
-              bufferedRawToolCallsText,
-            )
-            if (
-              !parsedBufferedToolCalls &&
-              !couldBeRawToolCallsRequestedPrefix(bufferedRawToolCallsText)
-            ) {
-              yield* emitTextDelta(bufferedRawToolCallsText)
-            }
-            bufferedRawToolCallsText = null
-          }
-          for (const tc of delta.tool_calls) {
-            if (tc.id && tc.function?.name) {
-              // New tool call starting — close any open thinking block first
-              if (hasEmittedThinkingStart && !hasClosedThinking) {
-                yield { type: 'content_block_stop', index: contentBlockIndex }
-                contentBlockIndex++
-                hasClosedThinking = true
-              }
-              if (hasEmittedContentStart) {
-                yield* closeActiveContentBlock()
-              }
-
-              const toolBlockIndex = contentBlockIndex
-              const initialArguments = tc.function.arguments ?? ''
-              const normalizeAtStop = hasToolFieldMapping(tc.function.name)
-              const toolExtraContent = tc.extra_content ?? delta.extra_content
-              const toolSignature =
-                geminiThoughtSignatureFromExtraContent(tc.extra_content) ??
-                geminiThoughtSignatureFromExtraContent(delta.extra_content)
-              const mergedToolExtraContent = mergeGeminiThoughtSignature(
-                toolExtraContent,
-                toolSignature,
-              )
-              processStreamChunk(streamState, tc.function.arguments ?? '')
-              activeToolCalls.set(tc.index, {
-                id: tc.id,
-                name: tc.function.name,
-                index: toolBlockIndex,
-                jsonBuffer: initialArguments,
-                normalizeAtStop,
-              })
-
-              yield {
-                type: 'content_block_start',
-                index: toolBlockIndex,
-                content_block: {
-                  type: 'tool_use',
+                const toolBlockIndex = contentBlockIndex
+                const initialArguments = tc.function.arguments ?? ''
+                const normalizeAtStop = hasToolFieldMapping(tc.function.name)
+                const toolExtraContent = tc.extra_content ?? delta.extra_content
+                const toolSignature =
+                  geminiThoughtSignatureFromExtraContent(tc.extra_content) ??
+                  geminiThoughtSignatureFromExtraContent(delta.extra_content)
+                const mergedToolExtraContent = mergeGeminiThoughtSignature(
+                  toolExtraContent,
+                  toolSignature,
+                )
+                processStreamChunk(streamState, tc.function.arguments ?? '')
+                activeToolCalls.set(tc.index, {
                   id: tc.id,
                   name: tc.function.name,
-                  input: {},
-                  ...(mergedToolExtraContent ? { extra_content: mergedToolExtraContent } : {}),
-                  ...(toolSignature ? { signature: toolSignature } : {}),
-                },
-              }
-              contentBlockIndex++
-
-              // Emit any initial arguments
-              if (tc.function.arguments && !normalizeAtStop) {
-                yield {
-                  type: 'content_block_delta',
                   index: toolBlockIndex,
-                  delta: {
-                    type: 'input_json_delta',
-                    partial_json: tc.function.arguments,
-                  },
-                }
-              }
-            } else if (tc.function?.arguments) {
-              // Continuation of existing tool call
-              const active = activeToolCalls.get(tc.index)
-              if (active) {
-                if (tc.function.arguments) {
-                  active.jsonBuffer += tc.function.arguments
-                }
-
-                if (active.normalizeAtStop) {
-                  continue
-                }
-
-                yield {
-                  type: 'content_block_delta',
-                  index: active.index,
-                  delta: {
-                    type: 'input_json_delta',
-                    partial_json: tc.function.arguments,
-                  },
-                }
+                  jsonBuffer: initialArguments,
+                  normalizeAtStop,
+                })
+                contentBlockIndex++
               }
             }
-          }
-        }
-
-        // Finish — guard ensures we only process finish_reason once even if
-        // multiple chunks arrive with finish_reason set (some providers do this)
-        if (choice.finish_reason && !hasProcessedFinishReason) {
-          hasProcessedFinishReason = true
-
-          // Close any open thinking block that wasn't closed by content transition
-          if (hasEmittedThinkingStart && !hasClosedThinking) {
-            yield { type: 'content_block_stop', index: contentBlockIndex }
-            contentBlockIndex++
-            hasClosedThinking = true
-          }
-          const parsedBufferedToolCalls = bufferedRawToolCallsText
-            ? parseRawToolCallsRequestedText(bufferedRawToolCallsText)
-            : null
-          if (parsedBufferedToolCalls) {
-            yield* emitParsedRawToolCalls(parsedBufferedToolCalls)
-            bufferedRawToolCallsText = null
-          } else if (bufferedRawToolCallsText !== null) {
-            yield* emitTextDelta(bufferedRawToolCallsText)
-            bufferedRawToolCallsText = null
-          }
-          // Close any open content blocks
-          if (hasEmittedContentStart) {
-            yield* closeActiveContentBlock()
-          }
-          // Close active tool calls
-          for (const [, tc] of activeToolCalls) {
-            if (tc.normalizeAtStop) {
-              let partialJson: string
-              if (choice.finish_reason === 'length') {
-                // Truncated by max tokens — preserve raw buffer to avoid
-                // turning an incomplete tool call into an executable command
-                partialJson = tc.jsonBuffer
-              } else {
-                const repairedStructuredJson = repairPossiblyTruncatedObjectJson(
-                  tc.jsonBuffer,
-                )
-                if (repairedStructuredJson) {
-                  partialJson = repairedStructuredJson
-                } else {
-                  partialJson = JSON.stringify(
-                    normalizeToolArguments(tc.name, tc.jsonBuffer),
-                  )
-                }
-              }
-
-              yield {
-                type: 'content_block_delta',
-                index: tc.index,
-                delta: {
-                  type: 'input_json_delta',
-                  partial_json: partialJson,
-                },
-              }
-              yield { type: 'content_block_stop', index: tc.index }
-              continue
-            }
-
-            let suffixToAdd = ''
-            if (tc.jsonBuffer) {
-              try {
-                JSON.parse(tc.jsonBuffer)
-              } catch {
-                const str = tc.jsonBuffer.trimEnd()
-                for (const combo of JSON_REPAIR_SUFFIXES) {
-                  try {
-                    JSON.parse(str + combo)
-                    suffixToAdd = combo
-                    break
-                  } catch {}
-                }
-              }
-            }
-
-            if (suffixToAdd) {
-              yield {
-                type: 'content_block_delta',
-                index: tc.index,
-                delta: {
-                  type: 'input_json_delta',
-                  partial_json: suffixToAdd,
-                },
-              }
-            }
-
-            yield { type: 'content_block_stop', index: tc.index }
-          }
-
-          const stopReason =
-            parsedBufferedToolCalls || choice.finish_reason === 'tool_calls'
-              ? 'tool_use'
-              : choice.finish_reason === 'length'
-                ? 'max_tokens'
-                : 'end_turn'
-          if (choice.finish_reason === 'content_filter' || choice.finish_reason === 'safety') {
-            // Gemini/Azure content safety filter blocked the response.
-            // Emit a visible text block so the user knows why output was truncated.
-            if (!hasEmittedContentStart) {
-              yield {
-                type: 'content_block_start',
-                index: contentBlockIndex,
-                content_block: { type: 'text', text: '' },
-              }
-              hasEmittedContentStart = true
-            }
-            yield {
-              type: 'content_block_delta',
-              index: contentBlockIndex,
-              delta: { type: 'text_delta', text: '\n\n[Content blocked by provider safety filter]' },
-            }
-          } else if (choice.finish_reason === 'length') {
-            // Response was truncated — either the model hit max_tokens, or
-            // an upstream/gateway watchdog synthesized a graceful end after
-            // detecting a stalled stream. Either way, the user should know
-            // the answer they're seeing isn't complete.
-            if (!hasEmittedContentStart) {
-              yield {
-                type: 'content_block_start',
-                index: contentBlockIndex,
-                content_block: { type: 'text', text: '' },
-              }
-              hasEmittedContentStart = true
-            }
-            yield {
-              type: 'content_block_delta',
-              index: contentBlockIndex,
-              delta: { type: 'text_delta', text: '\n\n[Response truncated — reached length limit or upstream stalled. Ask the model to continue.]' },
-            }
-          }
-          lastStopReason = stopReason
-
-          yield {
-            type: 'message_delta',
-            delta: { stop_reason: stopReason, stop_sequence: null },
-            ...(chunkUsage ? { usage: chunkUsage } : {}),
-          }
-          if (chunkUsage) {
-            hasEmittedFinalUsage = true
           }
         }
       }
-
-      if (
-        !hasEmittedFinalUsage &&
-        chunkUsage &&
-        (chunk.choices?.length ?? 0) === 0 &&
-        lastStopReason !== null
-      ) {
-        yield {
-          type: 'message_delta',
-          delta: { stop_reason: lastStopReason, stop_sequence: null },
-          usage: chunkUsage,
-        }
-        hasEmittedFinalUsage = true
-      }
     }
-    }
+  } catch (error) {
+    logForDebugging(`Stream processing error: ${error instanceof Error ? error.message : String(error)}`, { level: 'warn' })
+    throw error
   } finally {
     reader.releaseLock()
   }
@@ -1801,9 +1604,9 @@ class OpenAIShimMessages {
       store: false,
     }
     // Emit reasoning_effort for chat_completions when the resolved provider
-     // request carries a reasoning effort (set via /effort, model alias default,
-     // or `?reasoning=<level>` query on the model string). OpenAI, Codex, and
-     // most OpenAI-compatible endpoints read it from this top-level field.
+    // request carries a reasoning effort (set via /effort, model alias default,
+    // or `?reasoning=<level>` query on the model string). OpenAI, Codex, and
+    // most OpenAI-compatible endpoints read it from this top-level field.
     if (request.reasoning) {
       body.reasoning_effort = request.reasoning.effort
     }
@@ -1988,9 +1791,9 @@ class OpenAIShimMessages {
       runtimeShimContext.routeId === 'xai' || isXaiBaseUrl(request.baseUrl)
     const xaiOAuthToken =
       isXaiRoute &&
-      !this.providerOverride?.apiKey &&
-      !routeCredential &&
-      !process.env.OPENAI_API_KEY
+        !this.providerOverride?.apiKey &&
+        !routeCredential &&
+        !process.env.OPENAI_API_KEY
         ? await resolveXaiAccessToken()
         : undefined
     const apiKey =
@@ -2030,7 +1833,7 @@ class OpenAIShimMessages {
           customAuthHeader.toLowerCase() === 'authorization' ? 'bearer' : 'raw'
         const customAuthScheme =
           process.env.OPENAI_AUTH_SCHEME === 'raw' ||
-          process.env.OPENAI_AUTH_SCHEME === 'bearer'
+            process.env.OPENAI_AUTH_SCHEME === 'bearer'
             ? process.env.OPENAI_AUTH_SCHEME
             : defaultCustomAuthScheme
         headers[customAuthHeader] =
@@ -2247,10 +2050,10 @@ class OpenAIShimMessages {
     let response: Response | undefined
     const provider = request.baseUrl.includes('nvidia') ? 'nvidia-nim'
       : request.baseUrl.includes('minimax') ? 'minimax'
-      : request.baseUrl.includes('xiaomimimo') || request.baseUrl.includes('mimo-v2') ? 'xiaomi-mimo'
-      : request.baseUrl.includes('localhost:11434') || request.baseUrl.includes('localhost:11435') ? 'ollama'
-      : request.baseUrl.includes('anthropic') ? 'anthropic'
-      : 'openai'
+        : request.baseUrl.includes('xiaomimimo') || request.baseUrl.includes('mimo-v2') ? 'xiaomi-mimo'
+          : request.baseUrl.includes('localhost:11434') || request.baseUrl.includes('localhost:11435') ? 'ollama'
+            : request.baseUrl.includes('anthropic') ? 'anthropic'
+              : 'openai'
     const { correlationId, startTime } = logApiCallStart(provider, request.resolvedModel)
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
@@ -2288,6 +2091,13 @@ class OpenAIShimMessages {
         throwClassifiedTransportError(error, requestUrl, failure)
       }
 
+      if (!response) {
+        throw APIError.generate(
+          500, undefined, 'OpenAI shim: response not set after fetch attempt',
+          new Headers(),
+        )
+      }
+
       if (response.ok) {
         let tokensIn = 0
         let tokensOut = 0
@@ -2311,7 +2121,7 @@ class OpenAIShimMessages {
         response.status === 429 &&
         attempt < maxAttempts - 1
       ) {
-        await response.text().catch(() => {})
+        await response.text().catch(() => { })
         const delaySec = Math.min(
           GITHUB_429_BASE_DELAY_SEC * 2 ** attempt,
           GITHUB_429_MAX_DELAY_SEC,
@@ -2332,7 +2142,7 @@ class OpenAIShimMessages {
           const responsesUrl = `${request.baseUrl}/responses`
           const responsesBody = buildResponsesBody()
 
-          let responsesResponse: Response
+          let responsesResponse: Response | undefined
           try {
             responsesResponse = await fetchWithProxyRetry(responsesUrl, {
               method: 'POST',
@@ -2344,25 +2154,27 @@ class OpenAIShimMessages {
             throwClassifiedTransportError(error, responsesUrl)
           }
 
-          if (responsesResponse.ok) {
+          if (responsesResponse?.ok) {
             return responsesResponse
           }
-          const responsesErrorBody = await responsesResponse.text().catch(() => 'unknown error')
-          const responsesFailure = classifyOpenAIHttpFailure({
-            status: responsesResponse.status,
-            body: responsesErrorBody,
-          })
-          let responsesErrorResponse: object | undefined
-          try { responsesErrorResponse = JSON.parse(responsesErrorBody) } catch { /* raw text */ }
-          throwClassifiedHttpError(
-            responsesResponse.status,
-            responsesErrorBody,
-            responsesErrorResponse,
-            responsesResponse.headers,
-            responsesUrl,
-            '',
-            responsesFailure,
-          )
+          if (responsesResponse) {
+            const responsesErrorBody = await responsesResponse.text().catch(() => 'unknown error')
+            const responsesFailure = classifyOpenAIHttpFailure({
+              status: responsesResponse.status,
+              body: responsesErrorBody,
+            })
+            let responsesErrorResponse: object | undefined
+            try { responsesErrorResponse = JSON.parse(responsesErrorBody) } catch { /* raw text */ }
+            throwClassifiedHttpError(
+              responsesResponse.status,
+              responsesErrorBody,
+              responsesErrorResponse,
+              responsesResponse.headers,
+              responsesUrl,
+              '',
+              responsesFailure,
+            )
+          }
         }
       }
 
@@ -2432,9 +2244,9 @@ class OpenAIShimMessages {
         message?: {
           role?: string
           content?:
-            | string
-            | null
-            | Array<{ type?: string; text?: string }>
+          | string
+          | null
+          | Array<{ type?: string; text?: string }>
           reasoning_content?: string | null
           extra_content?: Record<string, unknown>
           tool_calls?: Array<{
@@ -2552,7 +2364,7 @@ class OpenAIShimMessages {
 
     const stopReason =
       choice?.finish_reason === 'tool_calls' ||
-      content.some(block => block.type === 'tool_use')
+        content.some(block => block.type === 'tool_use')
         ? 'tool_use'
         : choice?.finish_reason === 'length'
           ? 'max_tokens'
@@ -2599,7 +2411,45 @@ export function createOpenAIShimClient(options: {
 }): unknown {
   hydrateGeminiAccessTokenFromSecureStorage()
   hydrateGithubModelsTokenFromSecureStorage()
-  hydrateOpenAIShimCompatibilityEnv()
+
+
+  // When Gemini provider is active, map Gemini env vars to OpenAI-compatible ones
+  // so the existing providerConfig.ts infrastructure picks them up correctly.
+  if (isEnvTruthy(process.env.CLAUDE_CODE_USE_GEMINI)) {
+    process.env.OPENAI_BASE_URL ??=
+      process.env.GEMINI_BASE_URL ??
+      'https://generativelanguage.googleapis.com/v1beta/openai'
+    const geminiApiKey =
+      process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY
+    if (geminiApiKey && !process.env.OPENAI_API_KEY) {
+      process.env.OPENAI_API_KEY = geminiApiKey
+    }
+    if (process.env.GEMINI_MODEL && !process.env.OPENAI_MODEL) {
+      process.env.OPENAI_MODEL = process.env.GEMINI_MODEL
+    }
+  } else if (isEnvTruthy(process.env.CLAUDE_CODE_USE_MISTRAL)) {
+    process.env.OPENAI_BASE_URL =
+      process.env.MISTRAL_BASE_URL ?? 'https://api.mistral.ai/v1'
+    process.env.OPENAI_API_KEY = process.env.MISTRAL_API_KEY
+    if (process.env.MISTRAL_MODEL) {
+      process.env.OPENAI_MODEL = process.env.MISTRAL_MODEL
+    }
+  } else if (isEnvTruthy(process.env.CLAUDE_CODE_USE_GITHUB)) {
+    process.env.OPENAI_BASE_URL ??= GITHUB_COPILOT_BASE_URL
+    process.env.OPENAI_API_KEY ??=
+      process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? ''
+  }
+
+  // Map Bankr env vars to OpenAI-compatible ones when present
+  if (process.env.BNKR_API_KEY && !process.env.OPENAI_API_KEY) {
+    process.env.OPENAI_API_KEY = process.env.BNKR_API_KEY
+  }
+  if (process.env.BANKR_BASE_URL && !process.env.OPENAI_BASE_URL) {
+    process.env.OPENAI_BASE_URL = process.env.BANKR_BASE_URL
+  }
+  if (process.env.BANKR_MODEL && !process.env.OPENAI_MODEL) {
+    process.env.OPENAI_MODEL = process.env.BANKR_MODEL
+  }
 
   const beta = new OpenAIShimBeta({
     ...(options.defaultHeaders ?? {}),

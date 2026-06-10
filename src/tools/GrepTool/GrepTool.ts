@@ -160,6 +160,13 @@ type Output = z.infer<OutputSchema>
 export const GrepTool = buildTool({
   name: GREP_TOOL_NAME,
   searchHint: 'search file contents with regex (ripgrep)',
+  parameterAliases: {
+    pattern: ['regex', 'expr'],
+    '-B': ['before', 'contextBefore'],
+    '-A': ['after', 'contextAfter'],
+    '-i': ['caseInsensitive'],
+    output_mode: ['mode', 'format'],
+  },
   // 20K chars - tool result persistence threshold
   maxResultSizeChars: 20_000,
   strict: true,

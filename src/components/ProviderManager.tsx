@@ -131,20 +131,20 @@ type OllamaSelectionState =
   | { state: 'idle' }
   | { state: 'loading' }
   | {
-      state: 'ready'
-      options: OptionWithDescription<string>[]
-      defaultValue?: string
-    }
+    state: 'ready'
+    options: OptionWithDescription<string>[]
+    defaultValue?: string
+  }
   | { state: 'unavailable'; message: string }
 
 type AtomicChatSelectionState =
   | { state: 'idle' }
   | { state: 'loading' }
   | {
-      state: 'ready'
-      options: OptionWithDescription<string>[]
-      defaultValue?: string
-    }
+    state: 'ready'
+    options: OptionWithDescription<string>[]
+    defaultValue?: string
+  }
   | { state: 'unavailable'; message: string }
 
 const FORM_STEPS: Array<{
@@ -154,60 +154,60 @@ const FORM_STEPS: Array<{
   helpText: string
   optional?: boolean
 }> = [
-  {
-    key: 'name',
-    label: 'Provider name',
-    placeholder: 'e.g. Ollama Home, OpenAI Work',
-    helpText: 'A short label shown in /provider and startup setup.',
-  },
-  {
-    key: 'baseUrl',
-    label: 'Base URL',
-    placeholder: 'e.g. http://localhost:11434/v1',
-    helpText: 'API base URL used for this provider profile.',
-  },
-  {
-    key: 'model',
-    label: 'Default model',
-    placeholder: 'e.g. llama3.1:8b or glm-4.7; glm-4.7-flash',
-    helpText: 'Model name(s) to use. Separate multiple with ";" or ","; first is default.',
-  },
-  {
-    key: 'apiFormat',
-    label: 'API mode',
-    placeholder: 'chat_completions',
-    helpText: 'Choose the OpenAI-compatible API surface for this provider.',
-    optional: true,
-  },
-  {
-    key: 'authHeader',
-    label: 'Auth header',
-    placeholder: 'e.g. api-key or X-API-Key',
-    helpText: 'Optional. Header name used for a custom provider key.',
-    optional: true,
-  },
-  {
-    key: 'authHeaderValue',
-    label: 'Auth header value',
-    placeholder: 'Leave empty to use the API key value',
-    helpText: 'Optional. Value sent in the custom auth header.',
-    optional: true,
-  },
-  {
-    key: 'apiKey',
-    label: 'API key',
-    placeholder: 'Leave empty if your provider does not require one',
-    helpText: 'Optional. Press Enter with empty value to skip.',
-    optional: true,
-  },
-  {
-    key: 'customHeaders',
-    label: 'Custom headers',
-    placeholder: 'e.g. X-Trace: enabled; X-Team: devtools',
-    helpText: 'Optional. Extra non-auth request headers for providers that support them.',
-    optional: true,
-  },
-]
+    {
+      key: 'name',
+      label: 'Provider name',
+      placeholder: 'e.g. Ollama Home, OpenAI Work',
+      helpText: 'A short label shown in /provider and startup setup.',
+    },
+    {
+      key: 'baseUrl',
+      label: 'Base URL',
+      placeholder: 'e.g. http://localhost:11434/v1',
+      helpText: 'API base URL used for this provider profile.',
+    },
+    {
+      key: 'model',
+      label: 'Default model',
+      placeholder: 'e.g. llama3.1:8b or glm-4.7; glm-4.7-flash',
+      helpText: 'Model name(s) to use. Separate multiple with ";" or ","; first is default.',
+    },
+    {
+      key: 'apiFormat',
+      label: 'API mode',
+      placeholder: 'chat_completions',
+      helpText: 'Choose the OpenAI-compatible API surface for this provider.',
+      optional: true,
+    },
+    {
+      key: 'authHeader',
+      label: 'Auth header',
+      placeholder: 'e.g. api-key or X-API-Key',
+      helpText: 'Optional. Header name used for a custom provider key.',
+      optional: true,
+    },
+    {
+      key: 'authHeaderValue',
+      label: 'Auth header value',
+      placeholder: 'Leave empty to use the API key value',
+      helpText: 'Optional. Value sent in the custom auth header.',
+      optional: true,
+    },
+    {
+      key: 'apiKey',
+      label: 'API key',
+      placeholder: 'Leave empty if your provider does not require one',
+      helpText: 'Optional. Press Enter with empty value to skip.',
+      optional: true,
+    },
+    {
+      key: 'customHeaders',
+      label: 'Custom headers',
+      placeholder: 'e.g. X-Trace: enabled; X-Team: devtools',
+      helpText: 'Optional. Extra non-auth request headers for providers that support them.',
+      optional: true,
+    },
+  ]
 
 const GITHUB_PROVIDER_ID = '__github_models__'
 const GITHUB_PROVIDER_LABEL = 'GitHub Models'
@@ -839,21 +839,21 @@ export function ProviderManager({ mode, onDone }: Props): React.ReactNode {
       },
       ...(hasStoredCodexOAuthCredentials
         ? [
-            {
-              value: 'logout-codex-oauth',
-              label: 'Log out Codex OAuth',
-              description: 'Clear securely stored Codex OAuth credentials',
-            },
-          ]
+          {
+            value: 'logout-codex-oauth',
+            label: 'Log out Codex OAuth',
+            description: 'Clear securely stored Codex OAuth credentials',
+          },
+        ]
         : []),
       ...(hasStoredXaiOAuthCredentials
         ? [
-            {
-              value: 'logout-xai-oauth',
-              label: 'Log out xAI OAuth',
-              description: 'Clear securely stored xAI OAuth credentials',
-            },
-          ]
+          {
+            value: 'logout-xai-oauth',
+            label: 'Log out xAI OAuth',
+            description: 'Clear securely stored xAI OAuth credentials',
+          },
+        ]
         : []),
       {
         value: 'done',
@@ -916,9 +916,9 @@ export function ProviderManager({ mode, onDone }: Props): React.ReactNode {
       setHasStoredCodexOAuthCredentials(
         Boolean(
           credentials?.apiKey ||
-            credentials?.accessToken ||
-            credentials?.refreshToken ||
-            credentials?.idToken,
+          credentials?.accessToken ||
+          credentials?.refreshToken ||
+          credentials?.idToken,
         ),
       )
       setStoredCodexOAuthProfileId(credentials?.profileId)
@@ -1260,6 +1260,17 @@ export function ProviderManager({ mode, onDone }: Props): React.ReactNode {
       refreshProfiles()
       const activationMessage = isActiveCodexOAuth
         ? buildCodexOAuthActivationMessage({
+          prefix: `Active provider: ${active.name}`,
+          activationWarning,
+          warnings: [
+            activationWarning,
+            settingsOverrideError
+              ? `could not clear startup provider override (${settingsOverrideError})`
+              : null,
+          ].filter((warning): warning is string => Boolean(warning)),
+        })
+        : isActiveXaiOAuth
+          ? buildXaiOAuthActivationMessage({
             prefix: `Active provider: ${active.name}`,
             activationWarning,
             warnings: [
@@ -1269,17 +1280,6 @@ export function ProviderManager({ mode, onDone }: Props): React.ReactNode {
                 : null,
             ].filter((warning): warning is string => Boolean(warning)),
           })
-        : isActiveXaiOAuth
-          ? buildXaiOAuthActivationMessage({
-              prefix: `Active provider: ${active.name}`,
-              activationWarning,
-              warnings: [
-                activationWarning,
-                settingsOverrideError
-                  ? `could not clear startup provider override (${settingsOverrideError})`
-                  : null,
-              ].filter((warning): warning is string => Boolean(warning)),
-            })
           : settingsOverrideError
             ? `Active provider: ${active.name}. Warning: could not clear startup provider override (${settingsOverrideError}).`
             : `Active provider: ${active.name}`
@@ -1509,7 +1509,7 @@ export function ProviderManager({ mode, onDone }: Props): React.ReactNode {
           : undefined,
       customHeaders:
         showsCustomHeaders &&
-        Object.keys(parsedCustomHeaders.headers).length > 0
+          Object.keys(parsedCustomHeaders.headers).length > 0
           ? parsedCustomHeaders.headers
           : undefined,
     }
@@ -1577,7 +1577,7 @@ export function ProviderManager({ mode, onDone }: Props): React.ReactNode {
     const routeId = resolveProviderEditorRouteId(provider, nextDraft.baseUrl)
     const apiFormat =
       routeSupportsApiFormatSelection(routeId) &&
-      routeSupportsResponsesModel(routeId, nextDraft.model)
+        routeSupportsResponsesModel(routeId, nextDraft.model)
         ? 'responses'
         : 'chat_completions'
 
@@ -1977,7 +1977,7 @@ export function ProviderManager({ mode, onDone }: Props): React.ReactNode {
               placeholder={`${currentStep.placeholder}${figures.ellipsis}`}
               mask={
                 currentStepKey === 'apiKey' ||
-                currentStepKey === 'authHeaderValue'
+                  currentStepKey === 'authHeaderValue'
                   ? '*'
                   : undefined
               }
@@ -2193,7 +2193,7 @@ export function ProviderManager({ mode, onDone }: Props): React.ReactNode {
                 if (!cleared.success) {
                   setErrorMessage(
                     cleared.warning ??
-                      'Could not clear Codex OAuth credentials.',
+                    'Could not clear Codex OAuth credentials.',
                   )
                   break
                 }
@@ -2234,7 +2234,7 @@ export function ProviderManager({ mode, onDone }: Props): React.ReactNode {
                 if (!cleared.success) {
                   setErrorMessage(
                     cleared.warning ??
-                      'Could not clear xAI OAuth credentials.',
+                    'Could not clear xAI OAuth credentials.',
                   )
                   break
                 }
@@ -2595,7 +2595,7 @@ export function ProviderManager({ mode, onDone }: Props): React.ReactNode {
               if (!cleared.success) {
                 setErrorMessage(
                   cleared.warning ??
-                    'Provider deleted, but Codex OAuth credentials could not be cleared.',
+                  'Provider deleted, but Codex OAuth credentials could not be cleared.',
                 )
               } else {
                 setStoredCodexOAuthProfileId(undefined)
@@ -2607,7 +2607,7 @@ export function ProviderManager({ mode, onDone }: Props): React.ReactNode {
               if (!cleared.success) {
                 setErrorMessage(
                   cleared.warning ??
-                    'Provider deleted, but xAI OAuth credentials could not be cleared.',
+                  'Provider deleted, but xAI OAuth credentials could not be cleared.',
                 )
               } else {
                 setStoredXaiOAuthProfileId(undefined)

@@ -574,10 +574,10 @@ export async function cleanupFailedConnection(
   inProcessServer?: Pick<InProcessMcpServer, 'close'>,
 ): Promise<void> {
   if (inProcessServer) {
-    await inProcessServer.close().catch(() => {})
+    await inProcessServer.close().catch(() => { })
   }
 
-  await transport.close().catch(() => {})
+  await transport.close().catch(() => { })
 }
 
 function isLocalMcpServer(config: ScopedMcpServerConfig): boolean {

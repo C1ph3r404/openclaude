@@ -41,9 +41,9 @@ type CodexTokenRefreshResponse = {
 
 let inFlightCodexRefresh:
   | Promise<{
-      refreshed: boolean
-      credentials?: CodexCredentialBlob
-    }>
+    refreshed: boolean
+    credentials?: CodexCredentialBlob
+  }>
   | null = null
 let inMemoryLastRefreshFailureAt: number | null = null
 
@@ -81,12 +81,12 @@ function normalizeCodexCredentialBlob(
 
   const lastRefreshAt =
     typeof record.lastRefreshAt === 'number' &&
-    Number.isFinite(record.lastRefreshAt)
+      Number.isFinite(record.lastRefreshAt)
       ? record.lastRefreshAt
       : undefined
   const lastRefreshFailureAt =
     typeof record.lastRefreshFailureAt === 'number' &&
-    Number.isFinite(record.lastRefreshFailureAt)
+      Number.isFinite(record.lastRefreshFailureAt)
       ? record.lastRefreshFailureAt
       : undefined
 
@@ -538,7 +538,7 @@ export async function refreshCodexAccessTokenIfNeeded(options?: {
       if (!saveResult.success) {
         throw new Error(
           saveResult.warning ??
-            'Codex token refresh succeeded but credentials could not be saved.',
+          'Codex token refresh succeeded but credentials could not be saved.',
         )
       }
 

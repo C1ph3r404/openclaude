@@ -50,22 +50,22 @@ type ResponsesInputPart =
 
 type ResponsesInputItem =
   | {
-      type: 'message'
-      role: 'user' | 'assistant'
-      content: ResponsesInputPart[]
-    }
+    type: 'message'
+    role: 'user' | 'assistant'
+    content: ResponsesInputPart[]
+  }
   | {
-      type: 'function_call'
-      id: string
-      call_id: string
-      name: string
-      arguments: string
-    }
+    type: 'function_call'
+    id: string
+    call_id: string
+    name: string
+    arguments: string
+  }
   | {
-      type: 'function_call_output'
-      call_id: string
-      output: string
-    }
+    type: 'function_call_output'
+    call_id: string
+    output: string
+  }
 
 type ResponsesTool = {
   type: 'function'
@@ -273,7 +273,7 @@ export function convertAnthropicMessagesToResponsesInput(
     if (role === 'assistant') {
       const textBlocks = Array.isArray(content)
         ? content.filter((block: { type?: string }) =>
-            block.type !== 'tool_use' && block.type !== 'thinking')
+          block.type !== 'tool_use' && block.type !== 'thinking')
         : content
       const parts = convertContentBlocksToResponsesParts(textBlocks, 'assistant')
       if (parts.length > 0) {
@@ -331,8 +331,8 @@ function ensureSchemaType(record: Record<string, unknown>): void {
     return
   }
   if (Array.isArray((record as Record<string, unknown>).anyOf) ||
-      Array.isArray((record as Record<string, unknown>).oneOf) ||
-      Array.isArray((record as Record<string, unknown>).allOf)) {
+    Array.isArray((record as Record<string, unknown>).oneOf) ||
+    Array.isArray((record as Record<string, unknown>).allOf)) {
     // Combinator-only schemas keep their semantics; forcing a `type` here
     // would silently narrow the alternatives.
     return
@@ -555,12 +555,12 @@ export async function performCodexRequest(options: {
     input: input.length > 0
       ? input
       : [
-          {
-            type: 'message',
-            role: 'user',
-            content: [{ type: 'input_text', text: '' }],
-          },
-        ],
+        {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: '' }],
+        },
+      ],
     store: false,
     stream: true,
   }

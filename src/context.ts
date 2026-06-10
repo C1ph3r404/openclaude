@@ -85,7 +85,7 @@ export const getGitStatus = memoize(async (): Promise<string | null> => {
     const truncatedStatus =
       status.length > MAX_STATUS_CHARS
         ? status.substring(0, MAX_STATUS_CHARS) +
-          '\n... (truncated because it exceeds 2k characters. If you need more information, run "git status" using BashTool)'
+        '\n... (truncated because it exceeds 2k characters. If you need more information, run "git status" using BashTool)'
         : status
 
     logForDiagnosticsNoPII('info', 'git_status_completed', {
@@ -100,6 +100,7 @@ export const getGitStatus = memoize(async (): Promise<string | null> => {
       ...(userName ? [`Git user: ${userName}`] : []),
       `Status:\n${truncatedStatus || '(clean)'}`,
       `Recent commits:\n${log}`,
+      `<\env>`
     ].join('\n\n')
   } catch (error) {
     logForDiagnosticsNoPII('error', 'git_status_failed', {
@@ -123,7 +124,7 @@ export const getSystemContext = memoize(
     // Skip git status in CCR (unnecessary overhead on resume) or when git instructions are disabled
     const gitStatus =
       isEnvTruthy(process.env.CLAUDE_CODE_REMOTE) ||
-      !shouldIncludeGitInstructions()
+        !shouldIncludeGitInstructions()
         ? null
         : await getGitStatus()
 
@@ -142,8 +143,8 @@ export const getSystemContext = memoize(
       ...(gitStatus && { gitStatus }),
       ...(feature('BREAK_CACHE_COMMAND') && injection
         ? {
-            cacheBreaker: `[CACHE_BREAKER: ${injection}]`,
-          }
+          cacheBreaker: `[CACHE_BREAKER: ${injection}]`,
+        }
         : {}),
     }
   },

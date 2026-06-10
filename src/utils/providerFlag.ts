@@ -39,6 +39,7 @@ const PREFERRED_PROVIDER_ORDER = [
   'nvidia-nim',
   'minimax',
   'venice',
+  'browserllm',
 ] as const
 
 function buildValidProviders(): string[] {
@@ -185,23 +186,23 @@ export function applyProviderFlag(
 
   const copiedOpenAIKeyProvider =
     process.env.OPENAI_API_KEY !== undefined &&
-    process.env.OPENAI_API_KEY === process.env.NVIDIA_API_KEY &&
-    process.env.NVIDIA_NIM === '1'
+      process.env.OPENAI_API_KEY === process.env.NVIDIA_API_KEY &&
+      process.env.NVIDIA_NIM === '1'
       ? 'nvidia-nim'
       : process.env.OPENAI_API_KEY !== undefined &&
-          process.env.OPENAI_API_KEY === process.env.BNKR_API_KEY
+        process.env.OPENAI_API_KEY === process.env.BNKR_API_KEY
         ? 'bankr'
         : process.env.OPENAI_API_KEY !== undefined &&
-            process.env.OPENAI_API_KEY === process.env.XAI_API_KEY
+          process.env.OPENAI_API_KEY === process.env.XAI_API_KEY
           ? 'xai'
           : process.env.OPENAI_API_KEY !== undefined &&
-              process.env.OPENAI_API_KEY === process.env.MIMO_API_KEY
+            process.env.OPENAI_API_KEY === process.env.MIMO_API_KEY
             ? 'xiaomi-mimo'
             : process.env.OPENAI_API_KEY !== undefined &&
-                process.env.OPENAI_API_KEY === process.env.VENICE_API_KEY
+              process.env.OPENAI_API_KEY === process.env.VENICE_API_KEY
               ? 'venice'
               : process.env.OPENAI_API_KEY !== undefined &&
-                  process.env.OPENAI_API_KEY === process.env.MINIMAX_API_KEY
+                process.env.OPENAI_API_KEY === process.env.MINIMAX_API_KEY
                 ? 'minimax'
                 : null
 
@@ -282,6 +283,16 @@ export function applyProviderFlag(
       }
       break
 
+    case 'browserllm':
+      process.env.CLAUDE_CODE_USE_OPENAI = '1'
+      if (!process.env.OPENAI_BASE_URL) {
+        process.env.OPENAI_BASE_URL = 'http://localhost:3579/v1'
+      }
+      if (!process.env.OPENAI_API_KEY) {
+        process.env.OPENAI_API_KEY = 'browserllm'
+      }
+      if (model) process.env.OPENAI_MODEL = model
+      break
     case 'minimax':
       delete process.env.OPENAI_BASE_URL
       delete process.env.OPENAI_API_BASE

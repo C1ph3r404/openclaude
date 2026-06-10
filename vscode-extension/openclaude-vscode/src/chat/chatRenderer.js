@@ -1101,7 +1101,7 @@ function renderChatHtml({ nonce, platform }) {
   }
 
   /* ── Input handling ── */
-  function sendMessage() {
+  function chatGPTMesg() {
     const text = inputEl.value.trim();
     if (!text || isStreaming) return;
     appendUserMessage(text);
@@ -1120,10 +1120,10 @@ function renderChatHtml({ nonce, platform }) {
   inputEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      chatGPTMesg();
     }
   });
-  sendBtn.addEventListener('click', sendMessage);
+  sendBtn.addEventListener('click', chatGPTMesg);
   abortBtn.addEventListener('click', () => vscode.postMessage({ type: 'abort' }));
   newChatBtn.addEventListener('click', () => vscode.postMessage({ type: 'new_session' }));
   historyBtn.addEventListener('click', () => {

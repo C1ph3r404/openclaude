@@ -36,7 +36,7 @@ const SendUserFileTool = feature('KAIROS')
 const PushNotificationTool =
   feature('KAIROS') || feature('KAIROS_PUSH_NOTIFICATION')
     ? require('./tools/PushNotificationTool/PushNotificationTool.js')
-        .PushNotificationTool
+      .PushNotificationTool
     : null
 const SubscribePRTool = feature('KAIROS_GITHUB_WEBHOOKS')
   ? require('./tools/SubscribePRTool/SubscribePRTool.js').SubscribePRTool
@@ -56,9 +56,9 @@ const getTeamCreateTool = () =>
 const getTeamDeleteTool = () =>
   require('./tools/TeamDeleteTool/TeamDeleteTool.js')
     .TeamDeleteTool as typeof import('./tools/TeamDeleteTool/TeamDeleteTool.js').TeamDeleteTool
-const getSendMessageTool = () =>
-  require('./tools/SendMessageTool/SendMessageTool.js')
-    .SendMessageTool as typeof import('./tools/SendMessageTool/SendMessageTool.js').SendMessageTool
+const getchatGPTMesgTool = () =>
+  require('./tools/chatGPTMesgTool/chatGPTMesgTool.js')
+    .chatGPTMesgTool as typeof import('./tools/chatGPTMesgTool/chatGPTMesgTool.js').chatGPTMesgTool
 /* eslint-enable @typescript-eslint/no-require-imports */
 import { AskUserQuestionTool } from './tools/AskUserQuestionTool/AskUserQuestionTool.js'
 import { LSPTool } from './tools/LSPTool/LSPTool.js'
@@ -80,7 +80,7 @@ import { isTodoV2Enabled } from './utils/tasks.js'
 const VerifyPlanExecutionTool =
   process.env.CLAUDE_CODE_VERIFY_PLAN === 'true'
     ? require('./tools/VerifyPlanExecutionTool/VerifyPlanExecutionTool.js')
-        .VerifyPlanExecutionTool
+      .VerifyPlanExecutionTool
     : null
 /* eslint-enable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
 import { SYNTHETIC_OUTPUT_TOOL_NAME } from './tools/SyntheticOutputTool/SyntheticOutputTool.js'
@@ -101,7 +101,7 @@ const CtxInspectTool = feature('CONTEXT_COLLAPSE')
   : null
 const TerminalCaptureTool = feature('TERMINAL_PANEL')
   ? require('./tools/TerminalCaptureTool/TerminalCaptureTool.js')
-      .TerminalCaptureTool
+    .TerminalCaptureTool
   : null
 const WebBrowserTool = feature('WEB_BROWSER_TOOL')
   ? require('./tools/WebBrowserTool/WebBrowserTool.js').WebBrowserTool
@@ -117,9 +117,9 @@ const ListPeersTool = feature('UDS_INBOX')
   : null
 const WorkflowTool = feature('WORKFLOW_SCRIPTS')
   ? (() => {
-      require('./tools/WorkflowTool/bundled/index.js').initBundledWorkflows()
-      return require('./tools/WorkflowTool/WorkflowTool.js').WorkflowTool
-    })()
+    require('./tools/WorkflowTool/bundled/index.js').initBundledWorkflows()
+    return require('./tools/WorkflowTool/WorkflowTool.js').WorkflowTool
+  })()
   : null
 /* eslint-enable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
 import type { ToolPermissionContext } from './Tool.js'
@@ -211,7 +211,7 @@ export function getAllBaseTools(): Tools {
     LSPTool,
     ...(isWorktreeModeEnabled() ? [EnterWorktreeTool, ExitWorktreeTool] : []),
     // Use filter(Boolean) to handle case where getter might return null/undefined
-    ...(getSendMessageTool() ? [getSendMessageTool()] : []),
+    ...(getchatGPTMesgTool() ? [getchatGPTMesgTool()] : []),
     ...(ListPeersTool ? [ListPeersTool] : []),
     ...(isAgentSwarmsEnabled()
       ? [getTeamCreateTool(), getTeamDeleteTool()].filter(Boolean)
@@ -269,8 +269,8 @@ export const getTools = (permissionContext: ToolPermissionContext): Tools => {
         feature('COORDINATOR_MODE') &&
         coordinatorModeModule?.isCoordinatorMode()
       ) {
-        const sendMessageTool = getSendMessageTool()
-        if (sendMessageTool) replSimple.push(TaskStopTool, sendMessageTool)
+        const chatGPTMesgTool = getchatGPTMesgTool()
+        if (chatGPTMesgTool) replSimple.push(TaskStopTool, chatGPTMesgTool)
       }
       return filterToolsByDenyRules(replSimple, permissionContext)
     }
@@ -283,8 +283,8 @@ export const getTools = (permissionContext: ToolPermissionContext): Tools => {
       coordinatorModeModule?.isCoordinatorMode()
     ) {
       simpleTools.push(AgentTool, TaskStopTool)
-      const sendMessageTool = getSendMessageTool()
-      if (sendMessageTool) simpleTools.push(sendMessageTool)
+      const chatGPTMesgTool = getchatGPTMesgTool()
+      if (chatGPTMesgTool) simpleTools.push(chatGPTMesgTool)
     }
     return filterToolsByDenyRules(simpleTools, permissionContext)
   }

@@ -54,6 +54,7 @@ import {
 } from './sessionStorage.js'
 import { jsonStringify } from './slowOperations.js'
 import type { ContentReplacementRecord } from './toolResultStorage.js'
+import { logForDebugging } from './debug.js'
 
 // Dead code elimination: internal-only tool names are conditionally required so
 // their strings don't leak into external builds. Static imports always bundle.
@@ -61,19 +62,19 @@ import type { ContentReplacementRecord } from './toolResultStorage.js'
 const BRIEF_TOOL_NAME: string | null =
   feature('KAIROS') || feature('KAIROS_BRIEF')
     ? (
-        require('../tools/BriefTool/prompt.js') as typeof import('../tools/BriefTool/prompt.js')
-      ).BRIEF_TOOL_NAME
+      require('../tools/BriefTool/prompt.js') as typeof import('../tools/BriefTool/prompt.js')
+    ).BRIEF_TOOL_NAME
     : null
 const LEGACY_BRIEF_TOOL_NAME: string | null =
   feature('KAIROS') || feature('KAIROS_BRIEF')
     ? (
-        require('../tools/BriefTool/prompt.js') as typeof import('../tools/BriefTool/prompt.js')
-      ).LEGACY_BRIEF_TOOL_NAME
+      require('../tools/BriefTool/prompt.js') as typeof import('../tools/BriefTool/prompt.js')
+    ).LEGACY_BRIEF_TOOL_NAME
     : null
 const SEND_USER_FILE_TOOL_NAME: string | null = feature('KAIROS')
   ? (
-      require('../tools/SendUserFileTool/prompt.js') as typeof import('../tools/SendUserFileTool/prompt.js')
-    ).SEND_USER_FILE_TOOL_NAME
+    require('../tools/SendUserFileTool/prompt.js') as typeof import('../tools/SendUserFileTool/prompt.js')
+  ).SEND_USER_FILE_TOOL_NAME
   : null
 /* eslint-enable @typescript-eslint/no-require-imports */
 
@@ -576,10 +577,12 @@ export async function loadConversationForResume(
   prNumber?: number
   prUrl?: string
   prRepository?: string
-  // Full path to the session file (for cross-directory resume)
+  browserLLMConvoId?: string
+  // Full path to the session file (for cross-directory resume
   fullPath?: string
 } | null> {
   try {
+    logForDebugging(`[BROWSERLLM] loadConversationForResume: CALLED with source=${typeof source === 'string' ? source : 'LogOption'}`)
     let log: LogOption | null = null
     let messages: Message[] | null = null
     let sessionId: UUID | undefined
@@ -632,8 +635,34 @@ export async function loadConversationForResume(
 
     if (log) {
       // Load full messages for lite logs
-      if (isLiteLog(log)) {
+      const isLite = isLiteLog(log)
+      logForDebugging(`[BROWSERLLM] loadConversationForResume: log received, isLiteLog=${isLite}, log.browserLLMConvoId=${log?.browserLLMConvoId}`)
+      if (isLite) {
+        logForDebugging(`[BROWSERLLM] loadConversationForResume: calling loadFullLog...`)
         log = await loadFullLog(log)
+        logForDebugging(`[BROWSERLLM] loadConversationForResume: after loadFullLog, log.browserLLMConvoId=${log?.browserLLMConvoId}`)
+      } else if (!log.browserLLMConvoId && log.fullPath) {
+        // For non-lite logs, we still need to extract browserLLMConvoId from the transcript
+        logForDebugging(`[BROWSERLLM] loadConversationForResume: non-lite log, extracting browserLLMConvoId from file...`)
+        try {
+          const { browserLLMConvoIds } = await loadTranscriptFile(log.fullPath)
+          const sid = getSessionIdFromLog(log) as UUID | undefined
+          let convoId: string | undefined
+          if (sid) {
+            convoId = browserLLMConvoIds.get(sid)
+          }
+          // If not found by sessionId, try any entry in the map
+          if (!convoId && browserLLMConvoIds.size > 0) {
+            convoId = Array.from(browserLLMConvoIds.values())[0]
+            logForDebugging(`[BROWSERLLM] loadConversationForResume: Using first map entry: ${convoId}`)
+          }
+          if (convoId) {
+            log = { ...log, browserLLMConvoId: convoId }
+            logForDebugging(`[BROWSERLLM] loadConversationForResume: Extracted browserLLMConvoId=${convoId}`)
+          }
+        } catch (err) {
+          logForDebugging(`[BROWSERLLM] loadConversationForResume: Error extracting browserLLMConvoId: ${err}`)
+        }
       }
 
       // Determine sessionId first so we can pass it to copy functions
@@ -672,7 +701,7 @@ export async function loadConversationForResume(
     messages.push(...hookMessages)
     assertResumeMessageSize(messages)
 
-    return {
+    const result = {
       messages,
       turnInterruptionState: deserialized.turnInterruptionState,
       fileHistorySnapshots: log?.fileHistorySnapshots,
@@ -692,9 +721,12 @@ export async function loadConversationForResume(
       prNumber: log?.prNumber,
       prUrl: log?.prUrl,
       prRepository: log?.prRepository,
+      browserLLMConvoId: log?.browserLLMConvoId,
       // Include full path for cross-directory resume
       fullPath: log?.fullPath,
     }
+    logForDebugging(`[BROWSERLLM] loadConversationForResume: returning browserLLMConvoId=${result.browserLLMConvoId}`)
+    return result
   } catch (error) {
     logError(error as Error)
     throw error

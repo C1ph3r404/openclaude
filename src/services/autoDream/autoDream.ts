@@ -79,14 +79,14 @@ function getConfig(): AutoDreamConfig {
   return {
     minHours:
       typeof raw?.minHours === 'number' &&
-      Number.isFinite(raw.minHours) &&
-      raw.minHours > 0
+        Number.isFinite(raw.minHours) &&
+        raw.minHours > 0
         ? raw.minHours
         : DEFAULTS.minHours,
     minSessions:
       typeof raw?.minSessions === 'number' &&
-      Number.isFinite(raw.minSessions) &&
-      raw.minSessions > 0
+        Number.isFinite(raw.minSessions) &&
+        raw.minSessions > 0
         ? raw.minSessions
         : DEFAULTS.minSessions,
   }
@@ -110,9 +110,9 @@ type AppendSystemMessageFn = NonNullable<ToolUseContext['appendSystemMessage']>
 
 let runner:
   | ((
-      context: REPLHookContext,
-      appendSystemMessage?: AppendSystemMessageFn,
-    ) => Promise<void>)
+    context: REPLHookContext,
+    appendSystemMessage?: AppendSystemMessageFn,
+  ) => Promise<void>)
   | null = null
 
 /**
@@ -228,7 +228,7 @@ ${sessionIds.map(id => `- ${id}`).join('\n')}`
         querySource: 'auto_dream',
         forkLabel: 'auto_dream',
         skipTranscript: true,
-        overrides: { abortController },
+        overrides: { abortController, agentType: 'auto_dream' },
         onMessage: makeDreamProgressWatcher(taskId, setAppState),
       })
 

@@ -94,15 +94,15 @@ export function parseChatgptAccountId(
   const payload = decodeJwtPayload(token)
   const nestedAuth =
     payload?.['https://api.openai.com/auth'] &&
-    typeof payload['https://api.openai.com/auth'] === 'object'
+      typeof payload['https://api.openai.com/auth'] === 'object'
       ? (payload['https://api.openai.com/auth'] as Record<string, unknown>)
       : undefined
 
   return (
     asTrimmedString(
       nestedAuth?.chatgpt_account_id ??
-        payload?.['https://api.openai.com/auth.chatgpt_account_id'] ??
-        payload?.chatgpt_account_id,
+      payload?.['https://api.openai.com/auth.chatgpt_account_id'] ??
+      payload?.chatgpt_account_id,
     ) ?? undefined
   )
 }

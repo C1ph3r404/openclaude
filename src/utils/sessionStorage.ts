@@ -541,6 +541,7 @@ class Project {
   currentSessionPrNumber: number | undefined
   currentSessionPrUrl: string | undefined
   currentSessionPrRepository: string | undefined
+  currentSessionBrowserLLMConvoId: string | undefined
 
   sessionFile: string | null = null
   // Entries buffered while sessionFile is null. Flushed by materializeSessionFile
@@ -563,7 +564,7 @@ class Project {
   private FLUSH_INTERVAL_MS = 100
   private readonly MAX_CHUNK_BYTES = 100 * 1024 * 1024
 
-  constructor() {}
+  constructor() { }
 
   /** @internal Reset flush/queue state for testing. */
   _resetFlushState(): void {
@@ -1413,6 +1414,7 @@ export async function recordTranscript(
   const newMessages: typeof cleanedMessages = []
   let startingParentUuid: UUID | undefined = startingParentUuidHint
   let seenNewMessage = false
+  const wasSessionEmpty = messageSet.size === 0
   for (const m of cleanedMessages) {
     if (messageSet.has(m.uuid as UUID)) {
       // Only track skipped messages that form a prefix. After compaction,
@@ -1434,6 +1436,34 @@ export async function recordTranscript(
       teamInfo,
     )
   }
+
+  // Save BrowserLLM conversation ID after first assistant message
+  const hasAssistantMsg = newMessages.some(m => m.type === 'assistant')
+  const alreadySaved = getProject().currentSessionBrowserLLMConvoId
+  logForDebugging(`[BROWSERLLM] recordTranscript: hasAssistantMsg=${hasAssistantMsg}, alreadySaved=${alreadySaved}`)
+
+  if (hasAssistantMsg && !alreadySaved) {
+    void (async () => {
+      try {
+        const { isBrowserLLMProvider, getCurrentChatId } = await import('../services/api/browserLLMProvider.js')
+        logForDebugging(`[BROWSERLLM] recordTranscript: imported functions`)
+        const isBrowserLLM = isBrowserLLMProvider()
+        logForDebugging(`[BROWSERLLM] recordTranscript: isBrowserLLMProvider=${isBrowserLLM}`)
+        if (isBrowserLLM) {
+          const chatId = await getCurrentChatId()
+          logForDebugging(`[BROWSERLLM] recordTranscript: getCurrentChatId returned: ${chatId}`)
+          if (chatId) {
+            logForDebugging(`[BROWSERLLM] recordTranscript: saving convoId=${chatId}`)
+            saveBrowserLLMConvoId(chatId)
+            logForDebugging(`[BROWSERLLM] recordTranscript: saved successfully`)
+          }
+        }
+      } catch (error) {
+        logForDebugging(`[BROWSERLLM] recordTranscript: ERROR:` + ` ${error}`)
+      }
+    })()
+  }
+
   // Return the last ACTUALLY recorded chain-participant's UUID, OR the
   // prefix-tracked UUID if no new chain participants were recorded. This lets
   // callers (useLogMessages) maintain the correct parent chain even when the
@@ -3128,6 +3158,23 @@ export function saveMode(mode: 'coordinator' | 'normal'): void {
 }
 
 /**
+ * Save BrowserLLM conversation ID for session resume.
+ * Used when a session was running with BrowserLLM provider to persist
+ * the ChatGPT conversation ID so it can be resumed later.
+ */
+export function saveBrowserLLMConvoId(convoId: string): void {
+  const sessionId = getSessionId() as UUID
+  if (!sessionId) return
+  appendEntryToFile(getTranscriptPathForSession(sessionId), {
+    type: 'browserllm-convo-id',
+    sessionId,
+    convoId,
+  })
+  // Cache for current session so reAppendSessionMetadata can re-write
+  getProject().currentSessionBrowserLLMConvoId = convoId
+}
+
+/**
  * Record the session's worktree state for --resume. Written to disk by
  * materializeSessionFile on the first user message and re-stamped by
  * reAppendSessionMetadata on exit. Pass null when exiting a worktree
@@ -3141,16 +3188,16 @@ export function saveWorktreeState(
   // allows this, but we don't want them serialized to the transcript.
   const stripped: PersistedWorktreeSession | null = worktreeSession
     ? {
-        originalCwd: worktreeSession.originalCwd,
-        worktreePath: worktreeSession.worktreePath,
-        worktreeName: worktreeSession.worktreeName,
-        worktreeBranch: worktreeSession.worktreeBranch,
-        originalBranch: worktreeSession.originalBranch,
-        originalHeadCommit: worktreeSession.originalHeadCommit,
-        sessionId: worktreeSession.sessionId,
-        tmuxSessionName: worktreeSession.tmuxSessionName,
-        hookBased: worktreeSession.hookBased,
-      }
+      originalCwd: worktreeSession.originalCwd,
+      worktreePath: worktreeSession.worktreePath,
+      worktreeName: worktreeSession.worktreeName,
+      worktreeBranch: worktreeSession.worktreeBranch,
+      originalBranch: worktreeSession.originalBranch,
+      originalHeadCommit: worktreeSession.originalHeadCommit,
+      sessionId: worktreeSession.sessionId,
+      tmuxSessionName: worktreeSession.tmuxSessionName,
+      hookBased: worktreeSession.hookBased,
+    }
     : null
   const project = getProject()
   project.currentSessionWorktree = stripped
@@ -3218,6 +3265,7 @@ export async function loadFullLog(log: LogOption): Promise<LogOption> {
       prUrls,
       prRepositories,
       modes,
+      browserLLMConvoIds,
       worktreeStates,
       fileHistorySnapshots,
       attributionSnapshots,
@@ -3247,6 +3295,26 @@ export async function loadFullLog(log: LogOption): Promise<LogOption> {
     // Leaf's sessionId — forked sessions copy chain[0] from the source, but
     // metadata entries (custom-title etc.) are keyed by the current session.
     const sessionId = mostRecentLeaf.sessionId as UUID | undefined
+
+    logForDebugging(`[BROWSERLLM] loadFullLog: browserLLMConvoIds.size=${browserLLMConvoIds.size}, keys=[${Array.from(browserLLMConvoIds.keys()).join(', ')}]`)
+    logForDebugging(`[BROWSERLLM] loadFullLog: looking up sessionId=${sessionId}`)
+
+    let convoId: string | undefined
+    if (sessionId)
+      convoId = browserLLMConvoIds.get(sessionId)
+
+    // If not found by sessionId, try any entry in the map (may have different sessionId key)
+    if (!convoId && browserLLMConvoIds.size > 0) {
+      convoId = Array.from(browserLLMConvoIds.values())[0]
+      logForDebugging(`[BROWSERLLM] loadFullLog: No match for sessionId, using first map entry: ${convoId}`)
+    }
+
+    // Final fallback to log field
+    if (!convoId)
+      convoId = log.browserLLMConvoId
+
+    logForDebugging(`[BROWSERLLM] loadFullLog: sessionId=${sessionId}, convoId=${convoId}`)
+
     return {
       ...log,
       messages: removeExtraFields(transcript),
@@ -3270,6 +3338,7 @@ export async function loadFullLog(log: LogOption): Promise<LogOption> {
       prRepository: sessionId
         ? prRepositories.get(sessionId)
         : log.prRepository,
+      browserLLMConvoId: convoId,
       gitBranch: mostRecentLeaf?.gitBranch ?? log.gitBranch,
       isSidechain: transcript[0]?.isSidechain ?? log.isSidechain,
       teamName: transcript[0]?.teamName ?? log.teamName,
@@ -3603,7 +3672,7 @@ function walkChainBeforeParse(buf: Buffer): Buffer {
       let suffix0 = -1
       let suffixN: number[] | undefined
       let from = pos
-      for (;;) {
+      for (; ;) {
         const next = buf.indexOf(UUID_KEY, from)
         if (next < 0 || next >= lineEnd) break
         if (firstAny < 0) firstAny = next
@@ -3731,6 +3800,7 @@ export async function loadTranscriptFile(
   prUrls: Map<UUID, string>
   prRepositories: Map<UUID, string>
   modes: Map<UUID, string>
+  browserLLMConvoIds: Map<UUID, string>
   worktreeStates: Map<UUID, PersistedWorktreeSession | null>
   fileHistorySnapshots: Map<UUID, FileHistorySnapshotMessage>
   attributionSnapshots: Map<UUID, AttributionSnapshotMessage>
@@ -3751,6 +3821,7 @@ export async function loadTranscriptFile(
   const prUrls = new Map<UUID, string>()
   const prRepositories = new Map<UUID, string>()
   const modes = new Map<UUID, string>()
+  const browserLLMConvoIds = new Map<UUID, string>()
   const worktreeStates = new Map<UUID, PersistedWorktreeSession | null>()
   const fileHistorySnapshots = new Map<UUID, FileHistorySnapshotMessage>()
   const attributionSnapshots = new Map<UUID, AttributionSnapshotMessage>()
@@ -3838,28 +3909,31 @@ export async function loadTranscriptFile(
       forEachParsedJSONLBufferEntry<Entry>(
         Buffer.from(metadataLines.join('\n')),
         entry => {
-        if (entry.type === 'summary' && entry.leafUuid) {
-          summaries.set(entry.leafUuid, entry.summary)
-        } else if (entry.type === 'custom-title' && entry.sessionId) {
-          customTitles.set(entry.sessionId, entry.customTitle)
-        } else if (entry.type === 'tag' && entry.sessionId) {
-          tags.set(entry.sessionId, entry.tag)
-        } else if (entry.type === 'agent-name' && entry.sessionId) {
-          agentNames.set(entry.sessionId, entry.agentName)
-        } else if (entry.type === 'agent-color' && entry.sessionId) {
-          agentColors.set(entry.sessionId, entry.agentColor)
-        } else if (entry.type === 'agent-setting' && entry.sessionId) {
-          agentSettings.set(entry.sessionId, entry.agentSetting)
-        } else if (entry.type === 'mode' && entry.sessionId) {
-          modes.set(entry.sessionId, entry.mode)
-        } else if (entry.type === 'worktree-state' && entry.sessionId) {
-          worktreeStates.set(entry.sessionId, entry.worktreeSession)
-        } else if (entry.type === 'pr-link' && entry.sessionId) {
-          prNumbers.set(entry.sessionId, entry.prNumber)
-          prUrls.set(entry.sessionId, entry.prUrl)
-          prRepositories.set(entry.sessionId, entry.prRepository)
-        }
-      })
+          if (entry.type === 'summary' && entry.leafUuid) {
+            summaries.set(entry.leafUuid, entry.summary)
+          } else if (entry.type === 'custom-title' && entry.sessionId) {
+            customTitles.set(entry.sessionId, entry.customTitle)
+          } else if (entry.type === 'tag' && entry.sessionId) {
+            tags.set(entry.sessionId, entry.tag)
+          } else if (entry.type === 'agent-name' && entry.sessionId) {
+            agentNames.set(entry.sessionId, entry.agentName)
+          } else if (entry.type === 'agent-color' && entry.sessionId) {
+            agentColors.set(entry.sessionId, entry.agentColor)
+          } else if (entry.type === 'agent-setting' && entry.sessionId) {
+            agentSettings.set(entry.sessionId, entry.agentSetting)
+          } else if (entry.type === 'mode' && entry.sessionId) {
+            modes.set(entry.sessionId, entry.mode)
+          } else if (entry.type === 'worktree-state' && entry.sessionId) {
+            worktreeStates.set(entry.sessionId, entry.worktreeSession)
+          } else if (entry.type === 'pr-link' && entry.sessionId) {
+            prNumbers.set(entry.sessionId, entry.prNumber)
+            prUrls.set(entry.sessionId, entry.prUrl)
+            prRepositories.set(entry.sessionId, entry.prRepository)
+          } else if (entry.type === 'browserllm-convo-id' && entry.sessionId) {
+            logForDebugging(`[BROWSERLLM] loadTranscriptFile metadata pass: Found browserllm-convo-id entry: sessionId=${entry.sessionId}, convoId=${entry.convoId}`)
+            browserLLMConvoIds.set(entry.sessionId, entry.convoId)
+          }
+        })
     }
 
     // Bridge map for legacy progress entries: progress_uuid → progress_parent_uuid.
@@ -3922,6 +3996,9 @@ export async function loadTranscriptFile(
         prNumbers.set(entry.sessionId, entry.prNumber)
         prUrls.set(entry.sessionId, entry.prUrl)
         prRepositories.set(entry.sessionId, entry.prRepository)
+      } else if (entry.type === 'browserllm-convo-id' && entry.sessionId) {
+        logForDebugging(`[BROWSERLLM] loadTranscriptFile: Found browserllm-convo-id entry: sessionId=${entry.sessionId}, convoId=${entry.convoId}`)
+        browserLLMConvoIds.set(entry.sessionId, entry.convoId)
       } else if (entry.type === 'file-history-snapshot') {
         fileHistorySnapshots.set(entry.messageId, entry)
       } else if (entry.type === 'attribution-snapshot') {
@@ -4053,6 +4130,7 @@ export async function loadTranscriptFile(
     prUrls,
     prRepositories,
     modes,
+    browserLLMConvoIds,
     worktreeStates,
     fileHistorySnapshots,
     attributionSnapshots,
@@ -4657,8 +4735,8 @@ function transformMessagesForExternalTranscript(
       )
       const filtered = hasRepl
         ? content.filter(
-            b => !(b.type === 'tool_use' && b.name === REPL_TOOL_NAME),
-          )
+          b => !(b.type === 'tool_use' && b.name === REPL_TOOL_NAME),
+        )
         : content
       if (filtered.length === 0) return []
       if (m.isVirtual) {
@@ -4677,8 +4755,8 @@ function transformMessagesForExternalTranscript(
       )
       const filtered = hasRepl
         ? content.filter(
-            b => !(b.type === 'tool_result' && replIds.has(b.tool_use_id)),
-          )
+          b => !(b.type === 'tool_result' && replIds.has(b.tool_use_id)),
+        )
         : content
       if (filtered.length === 0) return []
       if (m.isVirtual) {
@@ -4706,9 +4784,9 @@ export function cleanMessagesForLogging(
   const filtered = messages.filter(isLoggableMessage) as Transcript
   return getUserType() !== 'ant'
     ? transformMessagesForExternalTranscript(
-        filtered,
-        collectReplIds(allMessages),
-      )
+      filtered,
+      collectReplIds(allMessages),
+    )
     : filtered
 }
 

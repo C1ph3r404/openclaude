@@ -259,9 +259,9 @@ export type QueryOptions = {
    */
   onPermissionRequest?: (message: SDKPermissionRequestMessage) => void
   systemPrompt?:
-    | string
-    | { type: 'preset'; preset: string; append?: string }
-    | { type: 'custom'; content: string }
+  | string
+  | { type: 'preset'; preset: string; append?: string }
+  | { type: 'custom'; content: string }
   /** Agent definitions to register with the query engine. */
   agents?: Record<string, {
     description: string
@@ -295,7 +295,7 @@ export interface Query {
   supportedModels(): string[]
   supportedAgents(): string[]
   mcpServerStatus(): McpServerStatus[]
-  accountInfo(): Promise<{ apiKeySource: ApiKeySource; [key: string]: unknown }>
+  accountInfo(): Promise<{ apiKeySource: ApiKeySource;[key: string]: unknown }>
   setMaxThinkingTokens(tokens: number): void
 }
 
@@ -382,7 +382,7 @@ export type SDKSessionOptions = {
 
 export interface SDKSession {
   sessionId: string
-  sendMessage(content: string): AsyncIterable<SDKMessage>
+  chatGPTMesg(content: string): AsyncIterable<SDKMessage>
   getMessages(): SDKMessage[]
   interrupt(): void
   /** Close the session and release resources (MCP connections, etc.). */

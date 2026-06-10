@@ -45,7 +45,7 @@ export type SubagentContext = {
    *  session_id already bundles the whole tree. Updated on each resume. */
   invokingRequestId?: string
   /** Whether this invocation is the initial spawn or a subsequent resume
-   *  via SendMessage. Undefined when invokingRequestId is absent. */
+   *  via chatGPTMesg. Undefined when invokingRequestId is absent. */
   invocationKind?: 'spawn' | 'resume'
   /** Mutable flag: has this invocation's edge been emitted to telemetry yet?
    *  Reset to false on each spawn/resume; flipped true by
@@ -162,9 +162,9 @@ export function getSubagentLogName():
  */
 export function consumeInvokingRequestId():
   | {
-      invokingRequestId: string
-      invocationKind: 'spawn' | 'resume' | undefined
-    }
+    invokingRequestId: string
+    invocationKind: 'spawn' | 'resume' | undefined
+  }
   | undefined {
   const context = getAgentContext()
   if (!context?.invokingRequestId || context.invocationEmitted) {

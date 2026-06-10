@@ -112,7 +112,7 @@ function isMiniMaxModelName(value: string | undefined): boolean {
   const normalized = value?.trim().toLowerCase()
   return Boolean(
     normalized &&
-      (normalized.startsWith('minimax-') || normalized.startsWith('minimax/')),
+    (normalized.startsWith('minimax-') || normalized.startsWith('minimax/')),
   )
 }
 
@@ -157,7 +157,7 @@ function isXaiModelName(value: string | undefined): boolean {
   const normalized = value?.trim().toLowerCase()
   return Boolean(
     normalized &&
-      (normalized.startsWith('grok-') || normalized.startsWith('xai/')),
+    (normalized.startsWith('grok-') || normalized.startsWith('xai/')),
   )
 }
 
@@ -192,7 +192,7 @@ function isXiaomiMimoModelName(value: string | undefined): boolean {
   const normalized = value?.trim().toLowerCase()
   return Boolean(
     normalized &&
-      (normalized.startsWith('mimo-') || normalized.startsWith('mimo/')),
+    (normalized.startsWith('mimo-') || normalized.startsWith('mimo/')),
   )
 }
 
@@ -243,6 +243,8 @@ export async function getAnthropicClient({
   fetchOverride,
   source,
   providerOverride,
+  agentId,
+  agentType,
   effortValue,
 }: {
   apiKey?: string
@@ -250,6 +252,8 @@ export async function getAnthropicClient({
   model?: string
   fetchOverride?: ClientOptions['fetch']
   source?: string
+  agentId?: string
+  agentType?: string
   providerOverride?: ProviderOverride
   effortValue?: EffortValue
 }): Promise<Anthropic> {
@@ -274,7 +278,14 @@ export async function getAnthropicClient({
       : {}),
     // SDK consumers can identify their app/library for backend analytics
     ...(clientApp ? { 'x-client-app': clientApp } : {}),
+    // Add agent ID header for all agent requests (works with all providers including local)
+    ...(agentId ? { 'x-agent-id': agentId } : {}),
+    // Add agent type header for analytics tracking
+    ...(agentType ? { 'x-agent-type': agentType } : {}),
   }
+
+  //debug Agent Id
+  logForDebugging("getAnthropicClient Agent Id: " + agentId);
 
   // Log API client configuration for HFI debugging
   logForDebugging(
@@ -328,7 +339,9 @@ export async function getAnthropicClient({
     await configureApiKeyHeaders(defaultHeaders, getIsNonInteractiveSession())
   }
 
-  const resolvedFetch = buildFetch(fetchOverride, source)
+  //debug Agent Id
+  logForDebugging("getAnthropicClient Agent Id: " + agentId);
+  const resolvedFetch = buildFetch(fetchOverride, source, agentId)
 
   const ARGS = {
     defaultHeaders,
@@ -401,7 +414,7 @@ export async function getAnthropicClient({
     // Use region override for small fast model if specified
     const awsRegion =
       model === getSmallFastModel() &&
-      process.env.ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION
+        process.env.ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION
         ? process.env.ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION
         : getAWSRegion()
 
@@ -513,31 +526,31 @@ export async function getAnthropicClient({
 
     const googleAuth = isEnvTruthy(process.env.CLAUDE_CODE_SKIP_VERTEX_AUTH)
       ? ({
-          // Mock GoogleAuth for testing/proxy scenarios
-          getClient: () => ({
-            getRequestHeaders: () => ({}),
-          }),
-        } as {
-          getClient: () => {
-            getRequestHeaders: () => Record<string, string>
-          }
-        })
+        // Mock GoogleAuth for testing/proxy scenarios
+        getClient: () => ({
+          getRequestHeaders: () => ({}),
+        }),
+      } as {
+        getClient: () => {
+          getRequestHeaders: () => Record<string, string>
+        }
+      })
       : new GoogleAuth({
-          scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-          // Only use ANTHROPIC_VERTEX_PROJECT_ID as last resort fallback
-          // This prevents the 12-second metadata server timeout when:
-          // - No project env vars are set AND
-          // - No credential keyfile is specified AND
-          // - ADC file exists but lacks project_id field
-          //
-          // Risk: If auth project != API target project, this could cause billing/audit issues
-          // Mitigation: Users can set GOOGLE_CLOUD_PROJECT to override
-          ...(hasProjectEnvVar || hasKeyFile
-            ? {}
-            : {
-                projectId: process.env.ANTHROPIC_VERTEX_PROJECT_ID,
-              }),
-        })
+        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+        // Only use ANTHROPIC_VERTEX_PROJECT_ID as last resort fallback
+        // This prevents the 12-second metadata server timeout when:
+        // - No project env vars are set AND
+        // - No credential keyfile is specified AND
+        // - ADC file exists but lacks project_id field
+        //
+        // Risk: If auth project != API target project, this could cause billing/audit issues
+        // Mitigation: Users can set GOOGLE_CLOUD_PROJECT to override
+        ...(hasProjectEnvVar || hasKeyFile
+          ? {}
+          : {
+            projectId: process.env.ANTHROPIC_VERTEX_PROJECT_ID,
+          }),
+      })
 
     const vertexArgs = {
       ...ARGS,
@@ -561,7 +574,7 @@ export async function getAnthropicClient({
       : undefined,
     // Set baseURL from OAuth config when using staging OAuth
     ...(process.env.USER_TYPE === 'ant' &&
-    isEnvTruthy(process.env.USE_STAGING_OAUTH)
+      isEnvTruthy(process.env.USE_STAGING_OAUTH)
       ? { baseURL: getOauthConfig().BASE_API_URL }
       : process.env.ANTHROPIC_BASE_URL
         ? { baseURL: process.env.ANTHROPIC_BASE_URL }
@@ -616,7 +629,10 @@ export const CLIENT_REQUEST_ID_HEADER = 'x-client-request-id'
 function buildFetch(
   fetchOverride: ClientOptions['fetch'],
   source: string | undefined,
+  agentId?: string,
 ): ClientOptions['fetch'] {
+  // AgentId debug
+  logForDebugging("buildFetch AgentId: " + agentId);
   // eslint-disable-next-line eslint-plugin-n/no-unsupported-features/node-builtins
   const inner = fetchOverride ?? globalThis.fetch
   // Only send to the first-party API — Bedrock/Vertex/Foundry don't log it

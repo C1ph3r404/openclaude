@@ -85,11 +85,11 @@ export function createGuestPassesFeed(): FeedConfig {
     lines: [],
     customContent: {
       content: <>
-          <Box marginY={1}>
-            <Text color="claude">[✻] [✻] [✻]</Text>
-          </Box>
-          <Text dimColor>{subtitle}</Text>
-        </>,
+        <Box marginY={1}>
+          <Text color="claude">[✻] [✻] [✻]</Text>
+        </Box>
+        <Text dimColor>{subtitle}</Text>
+      </>,
       width: 48
     },
     footer: '/passes'

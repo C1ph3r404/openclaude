@@ -90,12 +90,11 @@ export function buildProviderManagerCompletion(result?: ProviderManagerResult): 
   const metaMessages =
     result?.action === 'activated' && result.activeProviderName
       ? [
-          `<system-reminder>Provider switched mid-session to ${result.activeProviderName}${
-            result.activeProviderModel
-              ? ` using model ${result.activeProviderModel}`
-              : ''
-          }. Use this provider/model for subsequent requests unless the user switches again.</system-reminder>`,
-        ]
+        `<system-reminder>Provider switched mid-session to ${result.activeProviderName}${result.activeProviderModel
+          ? ` using model ${result.activeProviderModel}`
+          : ''
+        }. Use this provider/model for subsequent requests unless the user switches again.</system-reminder>`,
+      ]
       : undefined
 
   return { message, metaMessages }
@@ -145,27 +144,27 @@ type Step =
   | { name: 'openai-key'; defaultModel: string }
   | { name: 'openai-base'; apiKey: string; defaultModel: string }
   | {
-      name: 'openai-model'
-      apiKey: string
-      baseUrl: string | null
-      defaultModel: string
-    }
+    name: 'openai-model'
+    apiKey: string
+    baseUrl: string | null
+    defaultModel: string
+  }
   | { name: 'mistral-key'; defaultModel: string }
   | { name: 'mistral-base'; apiKey: string; defaultModel: string }
   | {
-      name: 'mistral-model'
-      apiKey: string
-      baseUrl: string | null
-      defaultModel: string
-    }
+    name: 'mistral-model'
+    apiKey: string
+    baseUrl: string | null
+    defaultModel: string
+  }
   | { name: 'gemini-auth-method' }
   | { name: 'gemini-key' }
   | { name: 'gemini-access-token' }
   | {
-      name: 'gemini-model'
-      apiKey?: string
-      authMode: 'api-key' | 'access-token' | 'adc'
-    }
+    name: 'gemini-model'
+    apiKey?: string
+    authMode: 'api-key' | 'access-token' | 'adc'
+  }
   | { name: 'codex-oauth' }
   | { name: 'codex-check' }
 
@@ -331,8 +330,8 @@ export function buildCurrentProviderSummary(options?: {
       ),
       endpointLabel: getSafeDisplayValue(
         processEnv.OPENAI_BASE_URL ??
-          processEnv.OPENAI_API_BASE ??
-          'https://models.github.ai/inference',
+        processEnv.OPENAI_API_BASE ??
+        'https://models.github.ai/inference',
         secretSource,
       ),
       savedProfileLabel,
@@ -363,8 +362,8 @@ export function buildCurrentProviderSummary(options?: {
     providerLabel: 'Anthropic',
     modelLabel: getSafeDisplayValue(
       processEnv.ANTHROPIC_MODEL ??
-        processEnv.CLAUDE_MODEL ??
-        'claude-sonnet-4-6',
+      processEnv.CLAUDE_MODEL ??
+      'claude-sonnet-4-6',
       secretSource,
     ),
     endpointLabel: getSafeDisplayValue(
@@ -383,48 +382,48 @@ function buildSavedProfileSummary(
     case 'gemini':
       {
         const geminiMetadata = getProviderPresetUiMetadata('gemini')
-      return {
-        providerLabel: geminiMetadata.label,
-        modelLabel: getSafeDisplayValue(
-          env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL,
-          process.env,
-          env,
-        ),
-        endpointLabel: getSafeDisplayValue(
-          env.GEMINI_BASE_URL ?? DEFAULT_GEMINI_BASE_URL,
-          process.env,
-          env,
-        ),
-        credentialLabel:
-          env.GEMINI_AUTH_MODE === 'access-token'
-            ? 'access token (stored securely)'
-            : env.GEMINI_AUTH_MODE === 'adc'
-              ? 'local ADC'
-            : maskSecretForDisplay(env.GEMINI_API_KEY) !== undefined
-              ? 'configured'
-              : undefined,
-      }
+        return {
+          providerLabel: geminiMetadata.label,
+          modelLabel: getSafeDisplayValue(
+            env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL,
+            process.env,
+            env,
+          ),
+          endpointLabel: getSafeDisplayValue(
+            env.GEMINI_BASE_URL ?? DEFAULT_GEMINI_BASE_URL,
+            process.env,
+            env,
+          ),
+          credentialLabel:
+            env.GEMINI_AUTH_MODE === 'access-token'
+              ? 'access token (stored securely)'
+              : env.GEMINI_AUTH_MODE === 'adc'
+                ? 'local ADC'
+                : maskSecretForDisplay(env.GEMINI_API_KEY) !== undefined
+                  ? 'configured'
+                  : undefined,
+        }
       }
     case 'mistral':
       {
         const mistralMetadata = getProviderPresetUiMetadata('mistral')
-      return {
-        providerLabel: mistralMetadata.label,
-        modelLabel: getSafeDisplayValue(
-          env.MISTRAL_MODEL ?? DEFAULT_MISTRAL_MODEL,
-          process.env,
-          env,
-        ),
-        endpointLabel: getSafeDisplayValue(
-          env.MISTRAL_BASE_URL ?? DEFAULT_MISTRAL_BASE_URL,
-          process.env,
-          env,
-        ),
-        credentialLabel:
-          maskSecretForDisplay(env.MISTRAL_API_KEY) !== undefined
-            ? 'configured'
-            : undefined,
-      }
+        return {
+          providerLabel: mistralMetadata.label,
+          modelLabel: getSafeDisplayValue(
+            env.MISTRAL_MODEL ?? DEFAULT_MISTRAL_MODEL,
+            process.env,
+            env,
+          ),
+          endpointLabel: getSafeDisplayValue(
+            env.MISTRAL_BASE_URL ?? DEFAULT_MISTRAL_BASE_URL,
+            process.env,
+            env,
+          ),
+          credentialLabel:
+            maskSecretForDisplay(env.MISTRAL_API_KEY) !== undefined
+              ? 'configured'
+              : undefined,
+        }
       }
     case 'codex':
       return {
@@ -707,13 +706,13 @@ function ProviderChooser({
     },
     ...(canUseCodexOAuth
       ? [
-          {
-            label: 'Codex OAuth',
-            value: 'codex-oauth' as const,
-            description:
-              'Sign in with ChatGPT in your browser and store Codex tokens securely',
-          },
-        ]
+        {
+          label: 'Codex OAuth',
+          value: 'codex-oauth' as const,
+          description:
+            'Sign in with ChatGPT in your browser and store Codex tokens securely',
+        },
+      ]
       : []),
   ]
 
@@ -808,22 +807,22 @@ function AutoRecommendationStep({
 }): React.ReactNode {
   const [status, setStatus] = React.useState<
     | {
-        state: 'loading'
-      }
+      state: 'loading'
+    }
     | {
-        state: 'ollama'
-        model: string
-        summary: string
-      }
+      state: 'ollama'
+      model: string
+      summary: string
+    }
     | {
-        state: 'openai'
-        defaultModel: string
-        reason: string
-      }
+      state: 'openai'
+      defaultModel: string
+      reason: string
+    }
     | {
-        state: 'error'
-        message: string
-      }
+      state: 'error'
+      message: string
+    }
   >({ state: 'loading' })
 
   React.useEffect(() => {
@@ -994,10 +993,10 @@ function OllamaModelStep({
   const [status, setStatus] = React.useState<
     | { state: 'loading' }
     | {
-        state: 'ready'
-        options: OptionWithDescription<string>[]
-        defaultValue?: string
-      }
+      state: 'ready'
+      options: OptionWithDescription<string>[]
+      defaultValue?: string
+    }
     | { state: 'unavailable'; message: string }
   >({ state: 'loading' })
 
@@ -1252,10 +1251,10 @@ function CodexCredentialStep({
 
 function resolveCodexCredentials(processEnv: NodeJS.ProcessEnv):
   | {
-      ok: true
-      sourceDescription: string
-      credentialSource: 'oauth' | 'existing'
-    }
+    ok: true
+    sourceDescription: string
+    credentialSource: 'oauth' | 'existing'
+  }
   | { ok: false; message: string } {
   const credentials = resolveCodexApiCredentials(processEnv)
   const oauthHint = isBareMode()
@@ -1289,7 +1288,7 @@ function resolveCodexCredentials(processEnv: NodeJS.ProcessEnv):
         ? 'the current shell environment'
         : credentials.source === 'secure-storage'
           ? 'OpenClaude secure storage'
-        : credentials.authPath ?? DEFAULT_CODEX_BASE_URL,
+          : credentials.authPath ?? DEFAULT_CODEX_BASE_URL,
   }
 }
 
@@ -1370,210 +1369,210 @@ export function ProviderWizard({
     case 'openai-key':
       {
         const openAIMetadata = getProviderPresetUiMetadata('openai')
-      return (
-        <TextEntryDialog
-          resetStateKey={step.name}
-          title={`${openAIMetadata.name} setup`}
-          subtitle="Step 1 of 3"
-          description={
-            process.env.OPENAI_API_KEY
-              ? `Enter an API key, or leave this blank to reuse the current ${openAIMetadata.credentialEnvVars[0] ?? 'OPENAI_API_KEY'} from this session.`
-              : `Enter the API key for ${openAIMetadata.name}.`
-          }
-          initialValue=""
-          placeholder="sk-..."
-          mask="*"
-          allowEmpty={Boolean(process.env.OPENAI_API_KEY)}
-          validate={value => {
-            const candidate = value.trim() || process.env.OPENAI_API_KEY || ''
-            return sanitizeApiKey(candidate)
-              ? null
-              : 'Enter a real API key. Placeholder values like SUA_CHAVE are not valid.'
-          }}
-          onSubmit={value => {
-            const apiKey = value.trim() || process.env.OPENAI_API_KEY || ''
-            setStep({
-              name: 'openai-base',
-              apiKey,
-              defaultModel: step.defaultModel,
-            })
-          }}
-          onCancel={() => setStep({ name: 'choose' })}
-        />
-      )
+        return (
+          <TextEntryDialog
+            resetStateKey={step.name}
+            title={`${openAIMetadata.name} setup`}
+            subtitle="Step 1 of 3"
+            description={
+              process.env.OPENAI_API_KEY
+                ? `Enter an API key, or leave this blank to reuse the current ${openAIMetadata.credentialEnvVars[0] ?? 'OPENAI_API_KEY'} from this session.`
+                : `Enter the API key for ${openAIMetadata.name}.`
+            }
+            initialValue=""
+            placeholder="sk-..."
+            mask="*"
+            allowEmpty={Boolean(process.env.OPENAI_API_KEY)}
+            validate={value => {
+              const candidate = value.trim() || process.env.OPENAI_API_KEY || ''
+              return sanitizeApiKey(candidate)
+                ? null
+                : 'Enter a real API key. Placeholder values like SUA_CHAVE are not valid.'
+            }}
+            onSubmit={value => {
+              const apiKey = value.trim() || process.env.OPENAI_API_KEY || ''
+              setStep({
+                name: 'openai-base',
+                apiKey,
+                defaultModel: step.defaultModel,
+              })
+            }}
+            onCancel={() => setStep({ name: 'choose' })}
+          />
+        )
       }
 
     case 'openai-base':
       {
         const openAIMetadata = getProviderPresetUiMetadata('openai')
-      return (
-        <TextEntryDialog
-          resetStateKey={step.name}
-          title={`${openAIMetadata.name} setup`}
-          subtitle="Step 2 of 3"
-          description={`Optionally enter a base URL. Leave blank for ${openAIMetadata.baseUrl || DEFAULT_OPENAI_BASE_URL}.`}
-          initialValue={
-            defaults.openAIBaseUrl === DEFAULT_OPENAI_BASE_URL
-              ? ''
-              : defaults.openAIBaseUrl
-          }
-          placeholder={DEFAULT_OPENAI_BASE_URL}
-          allowEmpty
-          onSubmit={value => {
-            setStep({
-              name: 'openai-model',
-              apiKey: step.apiKey,
-              baseUrl: value.trim() || null,
-              defaultModel: step.defaultModel,
-            })
-          }}
-          onCancel={() =>
-            setStep({
-              name: 'openai-key',
-              defaultModel: step.defaultModel,
-            })
-          }
-        />
-      )
+        return (
+          <TextEntryDialog
+            resetStateKey={step.name}
+            title={`${openAIMetadata.name} setup`}
+            subtitle="Step 2 of 3"
+            description={`Optionally enter a base URL. Leave blank for ${openAIMetadata.baseUrl || DEFAULT_OPENAI_BASE_URL}.`}
+            initialValue={
+              defaults.openAIBaseUrl === DEFAULT_OPENAI_BASE_URL
+                ? ''
+                : defaults.openAIBaseUrl
+            }
+            placeholder={DEFAULT_OPENAI_BASE_URL}
+            allowEmpty
+            onSubmit={value => {
+              setStep({
+                name: 'openai-model',
+                apiKey: step.apiKey,
+                baseUrl: value.trim() || null,
+                defaultModel: step.defaultModel,
+              })
+            }}
+            onCancel={() =>
+              setStep({
+                name: 'openai-key',
+                defaultModel: step.defaultModel,
+              })
+            }
+          />
+        )
       }
 
     case 'openai-model':
       {
         const openAIMetadata = getProviderPresetUiMetadata('openai')
-      return (
-        <TextEntryDialog
-          resetStateKey={step.name}
-          title={`${openAIMetadata.name} setup`}
-          subtitle="Step 3 of 3"
-          description={`Enter a model name. Leave blank for ${step.defaultModel}.`}
-          initialValue={defaults.openAIModel ?? step.defaultModel}
-          placeholder={step.defaultModel}
-          allowEmpty
-          onSubmit={value => {
-            const env = buildOpenAIProfileEnv({
-              goal: normalizeRecommendationGoal(null),
-              apiKey: step.apiKey,
-              baseUrl: step.baseUrl,
-              model: value.trim() || step.defaultModel,
-              processEnv: {},
-            })
-            if (env) {
-              finishProfileSave(onDone, 'openai', env)
+        return (
+          <TextEntryDialog
+            resetStateKey={step.name}
+            title={`${openAIMetadata.name} setup`}
+            subtitle="Step 3 of 3"
+            description={`Enter a model name. Leave blank for ${step.defaultModel}.`}
+            initialValue={defaults.openAIModel ?? step.defaultModel}
+            placeholder={step.defaultModel}
+            allowEmpty
+            onSubmit={value => {
+              const env = buildOpenAIProfileEnv({
+                goal: normalizeRecommendationGoal(null),
+                apiKey: step.apiKey,
+                baseUrl: step.baseUrl,
+                model: value.trim() || step.defaultModel,
+                processEnv: {},
+              })
+              if (env) {
+                finishProfileSave(onDone, 'openai', env)
+              }
+            }}
+            onCancel={() =>
+              setStep({
+                name: 'openai-base',
+                apiKey: step.apiKey,
+                defaultModel: step.defaultModel,
+              })
             }
-          }}
-          onCancel={() =>
-            setStep({
-              name: 'openai-base',
-              apiKey: step.apiKey,
-              defaultModel: step.defaultModel,
-            })
-          }
-        />
-      )
+          />
+        )
       }
 
     case 'mistral-key':
       {
         const mistralMetadata = getProviderPresetUiMetadata('mistral')
-      return (
-        <TextEntryDialog
-          resetStateKey={step.name}
-          title={`${mistralMetadata.label} setup`}
-          subtitle="Step 1 of 3"
-          description={
-            process.env.MISTRAL_API_KEY
-              ? `Enter an API key, or leave this blank to reuse the current ${mistralMetadata.credentialEnvVars[0] ?? 'MISTRAL_API_KEY'} from this session.`
-              : `Enter the API key for ${mistralMetadata.label}.`
-          }
-          initialValue=""
-          placeholder="..."
-          mask="*"
-          allowEmpty={Boolean(process.env.MISTRAL_API_KEY)}
-          validate={value => {
-            const candidate = value.trim() || process.env.MISTRAL_API_KEY || ''
-            return sanitizeApiKey(candidate)
-              ? null
-              : 'Enter a real API key. Placeholder values like SUA_CHAVE are not valid.'
-          }}
-          onSubmit={value => {
-            const apiKey = value.trim() || process.env.MISTRAL_API_KEY || ''
-            setStep({
-              name: 'mistral-base',
-              apiKey,
-              defaultModel: step.defaultModel,
-            })
-          }}
-          onCancel={() => setStep({ name: 'choose' })}
-        />
-      )
+        return (
+          <TextEntryDialog
+            resetStateKey={step.name}
+            title={`${mistralMetadata.label} setup`}
+            subtitle="Step 1 of 3"
+            description={
+              process.env.MISTRAL_API_KEY
+                ? `Enter an API key, or leave this blank to reuse the current ${mistralMetadata.credentialEnvVars[0] ?? 'MISTRAL_API_KEY'} from this session.`
+                : `Enter the API key for ${mistralMetadata.label}.`
+            }
+            initialValue=""
+            placeholder="..."
+            mask="*"
+            allowEmpty={Boolean(process.env.MISTRAL_API_KEY)}
+            validate={value => {
+              const candidate = value.trim() || process.env.MISTRAL_API_KEY || ''
+              return sanitizeApiKey(candidate)
+                ? null
+                : 'Enter a real API key. Placeholder values like SUA_CHAVE are not valid.'
+            }}
+            onSubmit={value => {
+              const apiKey = value.trim() || process.env.MISTRAL_API_KEY || ''
+              setStep({
+                name: 'mistral-base',
+                apiKey,
+                defaultModel: step.defaultModel,
+              })
+            }}
+            onCancel={() => setStep({ name: 'choose' })}
+          />
+        )
       }
 
     case 'mistral-base':
       {
         const mistralMetadata = getProviderPresetUiMetadata('mistral')
-      return (
-        <TextEntryDialog
-          resetStateKey={step.name}
-          title={`${mistralMetadata.label} setup`}
-          subtitle="Step 2 of 3"
-          description={`Optionally enter a base URL. Leave blank for ${mistralMetadata.baseUrl || DEFAULT_MISTRAL_BASE_URL}.`}
-          initialValue={
-            defaults.mistralBaseUrl === DEFAULT_MISTRAL_BASE_URL
-              ? ''
-              : defaults.mistralBaseUrl
-          }
-          placeholder={DEFAULT_MISTRAL_BASE_URL}
-          allowEmpty
-          onSubmit={value => {
-            setStep({
-              name: 'mistral-model',
-              apiKey: step.apiKey,
-              baseUrl: value.trim() || null,
-              defaultModel: step.defaultModel,
-            })
-          }}
-          onCancel={() =>
-            setStep({
-              name: 'mistral-key',
-              defaultModel: step.defaultModel,
-            })
-          }
-        />
-      )
+        return (
+          <TextEntryDialog
+            resetStateKey={step.name}
+            title={`${mistralMetadata.label} setup`}
+            subtitle="Step 2 of 3"
+            description={`Optionally enter a base URL. Leave blank for ${mistralMetadata.baseUrl || DEFAULT_MISTRAL_BASE_URL}.`}
+            initialValue={
+              defaults.mistralBaseUrl === DEFAULT_MISTRAL_BASE_URL
+                ? ''
+                : defaults.mistralBaseUrl
+            }
+            placeholder={DEFAULT_MISTRAL_BASE_URL}
+            allowEmpty
+            onSubmit={value => {
+              setStep({
+                name: 'mistral-model',
+                apiKey: step.apiKey,
+                baseUrl: value.trim() || null,
+                defaultModel: step.defaultModel,
+              })
+            }}
+            onCancel={() =>
+              setStep({
+                name: 'mistral-key',
+                defaultModel: step.defaultModel,
+              })
+            }
+          />
+        )
       }
 
     case 'mistral-model':
       {
         const mistralMetadata = getProviderPresetUiMetadata('mistral')
-      return (
-        <TextEntryDialog
-          resetStateKey={step.name}
-          title={`${mistralMetadata.label} setup`}
-          subtitle="Step 3 of 3"
-          description={`Enter a model name. Leave blank for ${step.defaultModel}.`}
-          initialValue={defaults.mistralModel ?? step.defaultModel}
-          placeholder={step.defaultModel}
-          allowEmpty
-          onSubmit={value => {
-            const env = buildMistralProfileEnv({
-              model: value.trim() || step.defaultModel,
-              baseUrl: step.baseUrl,
-              apiKey: step.apiKey,
-              processEnv: process.env,
-            })
-            if (env) {
-              finishProfileSave(onDone, 'mistral', env)
+        return (
+          <TextEntryDialog
+            resetStateKey={step.name}
+            title={`${mistralMetadata.label} setup`}
+            subtitle="Step 3 of 3"
+            description={`Enter a model name. Leave blank for ${step.defaultModel}.`}
+            initialValue={defaults.mistralModel ?? step.defaultModel}
+            placeholder={step.defaultModel}
+            allowEmpty
+            onSubmit={value => {
+              const env = buildMistralProfileEnv({
+                model: value.trim() || step.defaultModel,
+                baseUrl: step.baseUrl,
+                apiKey: step.apiKey,
+                processEnv: process.env,
+              })
+              if (env) {
+                finishProfileSave(onDone, 'mistral', env)
+              }
+            }}
+            onCancel={() =>
+              setStep({
+                name: 'mistral-base',
+                apiKey: step.apiKey,
+                defaultModel: step.defaultModel,
+              })
             }
-          }}
-          onCancel={() =>
-            setStep({
-              name: 'mistral-base',
-              apiKey: step.apiKey,
-              defaultModel: step.defaultModel,
-            })
-          }
-        />
-      )
+          />
+        )
       }
 
     case 'gemini-auth-method': {
@@ -1597,11 +1596,10 @@ export function ProviderWizard({
           label: 'Access token',
           value: 'access-token',
           description: hasShellGeminiAccessToken || hasStoredGeminiAccessToken
-            ? `Use ${
-                hasShellGeminiAccessToken
-                  ? 'the current GEMINI_ACCESS_TOKEN'
-                  : 'the securely stored Gemini access token'
-              }`
+            ? `Use ${hasShellGeminiAccessToken
+              ? 'the current GEMINI_ACCESS_TOKEN'
+              : 'the securely stored Gemini access token'
+            }`
             : 'Enter a Gemini access token and store it securely',
         },
         {

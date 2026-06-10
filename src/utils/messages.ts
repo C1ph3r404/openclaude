@@ -141,7 +141,7 @@ import {
   FileReadTool,
   type Output as FileReadToolOutput,
 } from '../tools/FileReadTool/FileReadTool.js'
-import { SEND_MESSAGE_TOOL_NAME } from '../tools/SendMessageTool/constants.js'
+import { SEND_MESSAGE_TOOL_NAME } from 'src/tools/SendMessageTool/constants.js'
 import { TASK_CREATE_TOOL_NAME } from '../tools/TaskCreateTool/constants.js'
 import { TASK_OUTPUT_TOOL_NAME } from '../tools/TaskOutputTool/constants.js'
 import { TASK_UPDATE_TOOL_NAME } from '../tools/TaskUpdateTool/constants.js'
@@ -271,8 +271,8 @@ export function buildYoloRejectionMessage(reason: string): string {
 
   const ruleHint = feature('BASH_CLASSIFIER')
     ? `To allow this type of action in the future, the user can add a permission rule like ` +
-      `Bash(prompt: <description of allowed action>) to their settings. ` +
-      `At the end of your session, recommend what permission rules to add so you don't get blocked again.`
+    `Bash(prompt: <description of allowed action>) to their settings. ` +
+    `At the end of your session, recommend what permission rules to add so you don't get blocked again.`
     : `To allow this type of action in the future, the user can add a Bash permission rule to their settings.`
 
   return (
@@ -423,11 +423,11 @@ export function createAssistantMessage({
     content:
       typeof content === 'string'
         ? [
-            {
-              type: 'text' as const,
-              text: content === '' ? NO_CONTENT_MESSAGE : content,
-            } as BetaContentBlock, // NOTE: citations field is not supported in Bedrock API
-          ]
+          {
+            type: 'text' as const,
+            text: content === '' ? NO_CONTENT_MESSAGE : content,
+          } as BetaContentBlock, // NOTE: citations field is not supported in Bedrock API
+        ]
         : content,
     usage,
     isVirtual,
@@ -646,8 +646,8 @@ export function extractTag(html: string, tagName: string): string | null {
   // 4. Multiline content
   const pattern = new RegExp(
     `<${escapedTag}(?:\\s+[^>]*)?>` + // Opening tag with optional attributes
-      '([\\s\\S]*?)' + // Content (non-greedy match)
-      `<\\/${escapedTag}>`, // Closing tag
+    '([\\s\\S]*?)' + // Content (non-greedy match)
+    `<\\/${escapedTag}>`, // Closing tag
     'gi',
   )
 
@@ -1104,11 +1104,11 @@ export function getToolResultIDs(normalizedMessages: NormalizedMessage[]): {
     normalizedMessages.flatMap(_ =>
       _.type === 'user' && _.message.content[0]?.type === 'tool_result'
         ? [
-            [
-              _.message.content[0].tool_use_id,
-              _.message.content[0].is_error ?? false,
-            ],
-          ]
+          [
+            _.message.content[0].tool_use_id,
+            _.message.content[0].is_error ?? false,
+          ],
+        ]
         : ([] as [string, boolean][]),
     ),
   )
@@ -2023,7 +2023,7 @@ export function normalizeMessagesForAPI(
     // Determine which error this is
     const errorText =
       Array.isArray(msg.message.content) &&
-      msg.message.content[0]?.type === 'text'
+        msg.message.content[0]?.type === 'text'
         ? msg.message.content[0].text
         : undefined
     if (!errorText) {
@@ -2216,9 +2216,9 @@ export function normalizeMessagesForAPI(
                   const tool = tools.find(t => toolMatchesName(t, block.name))
                   const normalizedInput = tool
                     ? normalizeToolInputForAPI(
-                        tool,
-                        block.input as Record<string, unknown>,
-                      )
+                      tool,
+                      block.input as Record<string, unknown>,
+                    )
                     : block.input
                   const canonicalName = tool?.name ?? block.name
 
@@ -2236,7 +2236,7 @@ export function normalizeMessagesForAPI(
                   // When tool search is NOT enabled, explicitly construct tool_use
                   // block with only standard API fields to avoid sending fields like
                   // 'caller' that may be stored in sessions from tool search runs
-                    return {
+                  return {
                     type: 'tool_use' as const,
                     id: block.id,
                     name: canonicalName,
@@ -2652,6 +2652,19 @@ export function mergeUserContentBlocks(
   return [...a.slice(0, -1), smooshed, ...toolResults]
 }
 
+// parse recursively when the model return double escaped json
+function deepParseJSON(input: unknown): unknown {
+  let current = input
+
+  while (typeof current === 'string') {
+    const parsed = safeParseJSON(current)
+    if (parsed === null) break
+    current = parsed
+  }
+
+  return current
+}
+
 // Sometimes the API returns empty messages (eg. "\n\n"). We need to filter these out,
 // otherwise they will give an API error when we send them to the API next time we call query().
 export function normalizeContentFromAPI(
@@ -2662,6 +2675,8 @@ export function normalizeContentFromAPI(
   if (!contentBlocks) {
     return []
   }
+  logForDebugging("Normalizing content from API: " + JSON.stringify(contentBlocks));
+
   return contentBlocks.map(contentBlock => {
     switch (contentBlock.type) {
       case 'tool_use': {
@@ -2680,24 +2695,33 @@ export function normalizeContentFromAPI(
         // TODO: This needs patching as recursive fields can still be stringified
         let normalizedInput: unknown
         if (typeof contentBlock.input === 'string') {
-          const parsed = safeParseJSON(contentBlock.input)
-          if (parsed === null && contentBlock.input.length > 0) {
-            // TET/FC-v3 diagnostic: the streamed tool input JSON failed to
-            // parse. We fall back to {} which means downstream validation
-            // sees empty input. The raw prefix goes to debug log only — no
-            // PII-tagged proto column exists for it yet.
-            logEvent('tengu_tool_input_json_parse_fail', {
-              toolName: sanitizeToolNameForAnalytics(contentBlock.name),
-              inputLen: contentBlock.input.length,
-            })
-            if (process.env.USER_TYPE === 'ant') {
-              logForDebugging(
-                `tool input JSON parse fail: ${contentBlock.input.slice(0, 200)}`,
-                { level: 'warn' },
-              )
+          const parsed = deepParseJSON(contentBlock.input)
+          logForDebugging("Deep parsed tool output: " + JSON.stringify(parsed));
+
+          const isValidObject =
+            typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+
+          if (!isValidObject) {
+            if (contentBlock.input.length > 0) {
+              logEvent('tengu_tool_input_json_parse_fail', {
+                toolName: sanitizeToolNameForAnalytics(contentBlock.name),
+                inputLen: contentBlock.input.length,
+              })
+
+              if (process.env.USER_TYPE === 'ant') {
+                logForDebugging(
+                  `tool input JSON parse fail or invalid shape: ${contentBlock.input.slice(0, 200)}`,
+                  { level: 'warn' },
+                )
+              }
             }
+
+            logForDebugging("NormalizeFromAPI Failed to parse arguments");
+
+            normalizedInput = {}
+          } else {
+            normalizedInput = parsed
           }
-          normalizedInput = parsed ?? {}
         } else {
           normalizedInput = contentBlock.input
         }
@@ -2705,6 +2729,7 @@ export function normalizeContentFromAPI(
         // Then apply tool-specific corrections
         if (typeof normalizedInput === 'object' && normalizedInput !== null) {
           const tool = findToolByName(tools, contentBlock.name)
+          logForDebugging("TOOL VALUE: " + JSON.stringify(tool));
           if (tool) {
             try {
               normalizedInput = normalizeToolInput(
@@ -2713,7 +2738,7 @@ export function normalizeContentFromAPI(
                 agentId,
               )
             } catch (error) {
-              logError(new Error('Error normalizing tool input: ' + error))
+              logError(new Error('Error normalizing tool input1: ' + error))
               // Keep the original input if normalization fails
             }
           }
@@ -3259,9 +3284,8 @@ You can launch up to ${agentCount} agent(s) in parallel.
 **Guidelines:**
 - **Default**: Launch at least 1 Plan agent for most tasks - it helps validate your understanding and consider alternatives
 - **Skip agents**: Only for truly trivial tasks (typo fixes, single-line changes, simple renames)
-${
-  agentCount > 1
-    ? `- **Multiple agents**: Use up to ${agentCount} agents for complex tasks that benefit from different perspectives
+${agentCount > 1
+      ? `- **Multiple agents**: Use up to ${agentCount} agents for complex tasks that benefit from different perspectives
 
 Examples of when to use multiple agents:
 - The task touches multiple parts of the codebase
@@ -3274,8 +3298,8 @@ Example perspectives by task type:
 - Bug fix: root cause vs workaround vs prevention
 - Refactoring: minimal change vs clean architecture
 `
-    : ''
-}
+      : ''
+    }
 In the agent prompt:
 - Provide comprehensive background context from Phase 1 exploration including filenames and code path traces
 - Describe requirements and constraints
@@ -3567,11 +3591,11 @@ Read the team config to discover your teammates' names. Check the task list peri
             createToolResultMessage(FileReadTool, fileContent),
             ...(attachment.truncated
               ? [
-                  createUserMessage({
-                    content: `Note: The file ${attachment.filename} was too large and has been truncated to the first ${MAX_LINES_TO_READ} lines. Don't tell the user about this truncation. Use ${FileReadTool.name} to read more of the file if you need.`,
-                    isMeta: true, // only claude will see this
-                  }),
-                ]
+                createUserMessage({
+                  content: `Note: The file ${attachment.filename} was too large and has been truncated to the first ${MAX_LINES_TO_READ} lines. Don't tell the user about this truncation. Use ${FileReadTool.name} to read more of the file if you need.`,
+                  isMeta: true, // only claude will see this
+                }),
+              ]
               : []),
           ])
         }
@@ -3621,7 +3645,7 @@ Read the team config to discover your teammates' names. Check the task list peri
       const content =
         attachment.content.length > maxSelectionLength
           ? attachment.content.substring(0, maxSelectionLength) +
-            '\n... (truncated)'
+          '\n... (truncated)'
           : attachment.content
 
       return wrapMessagesInSystemReminder([
@@ -3674,7 +3698,7 @@ Read the team config to discover your teammates' names. Check the task list peri
         .map((todo, index) => `${index + 1}. [${todo.status}] ${todo.content}`)
         .join('\n')
 
-      let message = `The TodoWrite tool hasn't been used recently. If you're working on tasks that would benefit from tracking progress, consider using the TodoWrite tool to track progress. Also consider cleaning up the todo list if has become stale and no longer matches what you are working on. Only use it if it's relevant to the current work. This is just a gentle reminder - ignore if not applicable. Make sure that you NEVER mention this reminder to the user\n`
+      let message = `<todo-reminder>The TodoWrite tool hasn't been used recently. If you're working on tasks that would benefit from tracking progress, consider using the TodoWrite tool to track progress. Also consider cleaning up the todo list if has become stale and no longer matches what you are working on. Only use it if it's relevant to the current work. This is just a gentle reminder - ignore if not applicable. Make sure that you NEVER mention this reminder to the user</todo-reminder>\n`
       if (todoItems.length > 0) {
         message += `\n\nHere are the existing contents of your todo list:\n\n[${todoItems}]`
       }
@@ -3697,7 +3721,7 @@ Read the team config to discover your teammates' names. Check the task list peri
         .map(task => `#${task.id}. [${task.status}] ${task.subject}`)
         .join('\n')
 
-      let message = `The task tools haven't been used recently. If you're working on tasks that would benefit from tracking progress, consider using ${TASK_CREATE_TOOL_NAME} to add new tasks and ${TASK_UPDATE_TOOL_NAME} to update task status (set to in_progress when starting, completed when done). Also consider cleaning up the task list if it has become stale. Only use these if relevant to the current work. This is just a gentle reminder - ignore if not applicable. Make sure that you NEVER mention this reminder to the user\n`
+      let message = `<tasktool-reminder>The task tools haven't been used recently. If you're working on tasks that would benefit from tracking progress, consider using ${TASK_CREATE_TOOL_NAME} to add new tasks and ${TASK_UPDATE_TOOL_NAME} to update task status (set to in_progress when starting, completed when done). Also consider cleaning up the task list if it has become stale. Only use these if relevant to the current work. This is just a gentle reminder - ignore if not applicable. Make sure that you NEVER mention this reminder to the user</tasktool-reminder>\n`
       if (taskItems.length > 0) {
         message += `\n\nHere are the existing tasks:\n\n${taskItems}`
       }
@@ -3809,7 +3833,7 @@ Read the team config to discover your teammates' names. Check the task list peri
     case 'output_style': {
       const outputStyle =
         OUTPUT_STYLE_CONFIG[
-          attachment.style as keyof typeof OUTPUT_STYLE_CONFIG
+        attachment.style as keyof typeof OUTPUT_STYLE_CONFIG
         ]
       if (!outputStyle) {
         return []
@@ -5195,11 +5219,11 @@ export function ensureToolResultPairing(
               ? stripped
               : result.length === 0
                 ? [
-                    {
-                      type: 'text' as const,
-                      text: '[Orphaned tool result removed due to conversation resume]',
-                    },
-                  ]
+                  {
+                    type: 'text' as const,
+                    text: '[Orphaned tool result removed due to conversation resume]',
+                  },
+                ]
                 : null
           if (content !== null) {
             result.push({
@@ -5269,9 +5293,9 @@ export function ensureToolResultPairing(
 
     const assistantMsg = assistantContentChanged
       ? {
-          ...msg,
-          message: { ...msg.message, content: finalContent },
-        }
+        ...msg,
+        message: { ...msg.message, content: finalContent },
+      }
       : msg
 
     result.push(assistantMsg)
@@ -5449,8 +5473,8 @@ export function ensureToolResultPairing(
     if (getStrictToolResultPairing()) {
       throw new Error(
         `ensureToolResultPairing: tool_use/tool_result pairing mismatch detected (strict mode). ` +
-          `Refusing to repair — would inject synthetic placeholders into model context. ` +
-          `Message structure: ${messageTypes.join('; ')}. See inc-4977.`,
+        `Refusing to repair — would inject synthetic placeholders into model context. ` +
+        `Message structure: ${messageTypes.join('; ')}. See inc-4977.`,
       )
     }
 

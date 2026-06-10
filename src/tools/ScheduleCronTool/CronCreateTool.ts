@@ -56,6 +56,11 @@ export type CreateOutput = z.infer<OutputSchema>
 export const CronCreateTool = buildTool({
   name: CRON_CREATE_TOOL_NAME,
   searchHint: 'schedule a recurring or one-shot prompt',
+  parameterAliases: {
+    cron: ['schedule', 'expression'],
+    recurring: ['repeat'],
+    durable: ['persistent'],
+  },
   maxResultSizeChars: 100_000,
   shouldDefer: true,
   get inputSchema(): InputSchema {

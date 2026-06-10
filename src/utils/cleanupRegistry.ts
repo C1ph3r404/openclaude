@@ -21,5 +21,24 @@ export function registerCleanup(cleanupFn: () => Promise<void>): () => void {
  * Used internally by gracefulShutdown.
  */
 export async function runCleanupFunctions(): Promise<void> {
+  //terminate the browserllm server if it's running
+  const child = globalThis.browserLLMChild;
+
+  if (child && !child.killed) {
+    child.kill("SIGTERM");
+
+    await new Promise(resolve => {
+      child.once("exit", resolve);
+
+      setTimeout(() => {
+        if (!child.killed) {
+          child.kill("SIGKILL");
+        }
+
+        resolve(null);
+      }, 3000);
+    });
+  }
+
   await Promise.all(Array.from(cleanupFunctions).map(fn => fn()))
 }

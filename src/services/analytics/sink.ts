@@ -6,7 +6,7 @@
  */
 
 /** No-op — there are no gates to initialize. */
-export function initializeAnalyticsGates(): void {}
+export function initializeAnalyticsGates(): void { }
 
 /** No-op — there is no sink to initialize. */
-export function initializeAnalyticsSink(): void {}
+export function initializeAnalyticsSink(): void { }

@@ -14,16 +14,16 @@ export const call: LocalCommandCall = async (args, _context) => {
     const stats = getArcStats();
     const graph = getGlobalGraph();
     const entityCount = Object.keys(graph.entities).length;
-    
+
     const statusText = (config.knowledgeGraphEnabled !== false)
-      ? chalk.green('ENABLED') 
+      ? chalk.green('ENABLED')
       : chalk.red('DISABLED');
-      
+
     let output = `${chalk.bold('Knowledge Graph Engine')}: ${statusText}\n`;
     if (stats) {
       output += `• Stats: ${stats.goalCount} goals, ${stats.milestoneCount} milestones, ${entityCount} technical facts learned`;
     }
-    
+
     return { type: 'text', value: output };
   }
 
@@ -37,18 +37,18 @@ export const call: LocalCommandCall = async (args, _context) => {
     }
 
     saveGlobalConfig(current => ({ ...current, knowledgeGraphEnabled: isEnabled }));
-    return { 
-      type: 'text', 
-      value: `✨ Knowledge Graph engine ${isEnabled ? chalk.green('enabled') : chalk.red('disabled')}.` 
+    return {
+      type: 'text',
+      value: `✨ Knowledge Graph engine ${isEnabled ? chalk.green('enabled') : chalk.red('disabled')}.`
     };
   }
 
   if (subCommand === 'clear') {
     resetArc();
     resetGlobalGraph();
-    return { 
-      type: 'text', 
-      value: '🗑️ Knowledge graph memory has been cleared for this session.' 
+    return {
+      type: 'text',
+      value: '🗑️ Knowledge graph memory has been cleared for this session.'
     };
   }
 
@@ -56,8 +56,8 @@ export const call: LocalCommandCall = async (args, _context) => {
     return { type: 'text', value: await getArcSummary() };
   }
 
-  return { 
-    type: 'text', 
-    value: `Unknown subcommand: ${subCommand}. Available: enable, clear, status, list` 
+  return {
+    type: 'text',
+    value: `Unknown subcommand: ${subCommand}. Available: enable, clear, status, list`
   };
 };

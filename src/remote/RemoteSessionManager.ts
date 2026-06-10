@@ -39,13 +39,13 @@ function isSDKMessage(
  */
 export type RemotePermissionResponse =
   | {
-      behavior: 'allow'
-      updatedInput: Record<string, unknown>
-    }
+    behavior: 'allow'
+    updatedInput: Record<string, unknown>
+  }
   | {
-      behavior: 'deny'
-      message: string
-    }
+    behavior: 'deny'
+    message: string
+  }
 
 export type RemoteSessionConfig = {
   sessionId: string
@@ -100,7 +100,7 @@ export class RemoteSessionManager {
   constructor(
     private readonly config: RemoteSessionConfig,
     private readonly callbacks: RemoteSessionCallbacks,
-  ) {}
+  ) { }
 
   /**
    * Connect to the remote session via WebSocket
@@ -216,7 +216,7 @@ export class RemoteSessionManager {
   /**
    * Send a user message to the remote session via HTTP POST
    */
-  async sendMessage(
+  async chatGPTMesg(
     content: RemoteMessageContent,
     opts?: { uuid?: string },
   ): Promise<boolean> {

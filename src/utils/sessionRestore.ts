@@ -126,7 +126,7 @@ export function restoreSessionStateFromLog(
   // commits would leave the prior session's stale commit log intact.
   if (feature('CONTEXT_COLLAPSE')) {
     /* eslint-disable @typescript-eslint/no-require-imports */
-    ;(
+    ; (
       require('../services/contextCollapse/persist.js') as typeof import('../services/contextCollapse/persist.js')
     ).restoreFromEntries(
       result.contextCollapseCommits ?? [],
@@ -312,6 +312,7 @@ type ResumeLoadResult = {
   prNumber?: number
   prUrl?: string
   prRepository?: string
+  browserLLMConvoId?: string
 }
 
 /**
@@ -423,6 +424,7 @@ export async function processResumedConversation(
     initialState: AppState
   },
 ): Promise<ProcessedResume> {
+  logForDebugging(`[BROWSERLLM] processResumedConversation CALLED with result.browserLLMConvoId=${result.browserLLMConvoId}`)
   // Match coordinator/normal mode to the resumed session
   let modeWarning: string | undefined
   if (feature('COORDINATOR_MODE')) {
@@ -448,6 +450,32 @@ export async function processResumedConversation(
       await renameRecordingForSession()
       await resetSessionFilePointer()
       restoreCostStateForSession(sid)
+
+      // If resuming with BrowserLLM and we have a saved conversation ID,
+      // switch to that conversation in BrowserLLM
+      logForDebugging(`[BROWSERLLM] RESUME CHECK: result.browserLLMConvoId=${result.browserLLMConvoId}`)
+      logForDebugging(`[BROWSERLLM] RESUME CHECK: result.browserLLMConvoId=${result.browserLLMConvoId}`)
+      void logForDebugging(`[BROWSERLLM] Resume: browserLLMConvoId=${result.browserLLMConvoId}`)
+      if (result.browserLLMConvoId) {
+        void (async () => {
+          try {
+            void logForDebugging(`[BROWSERLLM] Resume: Calling setChatId with ${result.browserLLMConvoId}`)
+            const { isBrowserLLMProvider, setChatId } = await import('../services/api/browserLLMProvider.js')
+            void logForDebugging(`[BROWSERLLM] Resume: imported functions`)
+            const isBrowserLLM = isBrowserLLMProvider()
+            void logForDebugging(`[BROWSERLLM] Resume: isBrowserLLMProvider=${isBrowserLLM}`)
+            if (isBrowserLLM) {
+              void logForDebugging(`[BROWSERLLM] Resume: calling setChatId(${result.browserLLMConvoId})`)
+              const response = await setChatId(result.browserLLMConvoId!)
+              void logForDebugging(`[BROWSERLLM] Resume: setChatId response: ${JSON.stringify(response)}`)
+            }
+          } catch (error) {
+            void logForDebugging(`[BROWSERLLM] Resume: ERROR: ${error}`)
+          }
+        })()
+      } else {
+        void logForDebugging(`[BROWSERLLM] Resume: NO browserLLMConvoId in result`)
+      }
     }
   } else if (result.contentReplacements?.length) {
     // --fork-session keeps the fresh startup session ID. useLogMessages will
@@ -493,7 +521,7 @@ export async function processResumedConversation(
   // — see the restoreSessionStateFromLog callsite above for why.
   if (feature('CONTEXT_COLLAPSE')) {
     /* eslint-disable @typescript-eslint/no-require-imports */
-    ;(
+    ; (
       require('../services/contextCollapse/persist.js') as typeof import('../services/contextCollapse/persist.js')
     ).restoreFromEntries(
       result.contextCollapseCommits ?? [],

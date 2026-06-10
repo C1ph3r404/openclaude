@@ -70,22 +70,22 @@ import {
 
 type ModelDiscoveryContext =
   | {
-      kind: 'descriptor'
-      autoRefresh: boolean
-      canRefresh: boolean
-      discoveryState?: ModelPickerDiscoveryState
-      optionsOverride: ModelOption[]
-      routeId: string
-      routeDefaultModel?: string
-      routeLabel: string
-    }
+    kind: 'descriptor'
+    autoRefresh: boolean
+    canRefresh: boolean
+    discoveryState?: ModelPickerDiscoveryState
+    optionsOverride: ModelOption[]
+    routeId: string
+    routeDefaultModel?: string
+    routeLabel: string
+  }
   | {
-      kind: 'legacy-openai'
-      autoRefresh: boolean
-      canRefresh: boolean
-      discoveryState?: ModelPickerDiscoveryState
-      routeLabel: string
-    }
+    kind: 'legacy-openai'
+    autoRefresh: boolean
+    canRefresh: boolean
+    discoveryState?: ModelPickerDiscoveryState
+    routeLabel: string
+  }
 
 function renderModelLabel(model: string | null): string {
   const rendered = renderDefaultModelSetting(
@@ -597,8 +597,8 @@ function ModelPickerWrapper({
       onRefresh={
         discoveryContext?.canRefresh
           ? () => {
-              void refreshAvailableModels(true)
-            }
+            void refreshAvailableModels(true)
+          }
           : undefined
       }
     />
@@ -839,7 +839,6 @@ async function refreshModelsAndSummarize(): Promise<string> {
     }).message
   }
 }
-
 export const call: LocalJSXCommandCall = async (onDone, _context, args) => {
   const trimmedArgs = args?.trim() || ''
 

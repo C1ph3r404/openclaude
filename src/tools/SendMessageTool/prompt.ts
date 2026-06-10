@@ -20,7 +20,7 @@ Use \`ListPeers\` to discover targets, then:
 A listed peer is alive and will process your message — no "busy" state; messages enqueue and drain at the receiver's next tool round. Your message arrives wrapped as \`<cross-session-message from="...">\`. **To reply to an incoming message, copy its \`from\` attribute as your \`to\`.**`
     : ''
   return `
-# SendMessage
+# chatGPTMesg
 
 Send a message to another agent.
 

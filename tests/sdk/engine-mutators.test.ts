@@ -7,7 +7,7 @@ import {
   releaseSharedMutationLock,
 } from '../../src/test/sharedMutationLock.js'
 
-// sendMessage drains trigger init(), which checks auth. Stub it for CI.
+// chatGPTMesg drains trigger init(), which checks auth. Stub it for CI.
 const AUTH_KEY = 'ANTHROPIC_API_KEY'
 let savedApiKey: string | undefined
 
@@ -47,7 +47,7 @@ function makeConfig(overrides: Partial<QueryEngineConfig> = {}): QueryEngineConf
     agents: [],
     canUseTool: async () => ({ behavior: 'allow' as const }),
     getAppState: () => ({}) as any,
-    setAppState: () => {},
+    setAppState: () => { },
     readFileCache: {},
     ...overrides,
   }
@@ -68,14 +68,14 @@ describe('COR-1 regression: typed nullable appStateStore', () => {
     session.interrupt()
   })
 
-  test('SDKSessionImpl sendMessage returns async iterator after proper init', async () => {
+  test('SDKSessionImpl chatGPTMesg returns async iterator after proper init', async () => {
     const session = unstable_v2_createSession({
       cwd: process.cwd(),
     })
-    // sendMessage() must return an async iterable without throwing —
+    // chatGPTMesg() must return an async iterable without throwing —
     // this proves the appStateStore getter guard does not fire spuriously
     // after late-binding in createSession.
-    const iter = session.sendMessage('test')
+    const iter = session.chatGPTMesg('test')
     expect(typeof iter[Symbol.asyncIterator]).toBe('function')
 
     // Drain the iterator. In CI (no API key, MACRO undefined) we expect a
