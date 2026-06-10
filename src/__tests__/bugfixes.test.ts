@@ -107,10 +107,10 @@ describe('Agent loop continuation nudge', () => {
     // Transition intent detected (requires explicit action verb or transition phrase)
     expect(analyzeContinuationIntent("So now I will start task 2").shouldNudge).toBe(true)
     expect(analyzeContinuationIntent("I will now do the following").shouldNudge).toBe(true)
-    
+
     // Completion marker suppresses nudge
     expect(analyzeContinuationIntent("Task finished").shouldNudge).toBe(false)
-    
+
     // Punctuation-less completion suppresses nudge (Reviewer Feedback)
     expect(analyzeContinuationIntent("The analysis is complete and no code changes are needed here").shouldNudge).toBe(false)
     expect(analyzeContinuationIntent("I changed package.json and src/query.ts and added tests").shouldNudge).toBe(false)
@@ -334,11 +334,11 @@ describe('Regression checks', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Fix 6: SendMessageTool race condition guard
+// Fix 6: chatGPTMesgTool race condition guard
 // ---------------------------------------------------------------------------
-describe('SendMessageTool race condition fix', () => {
-  test('SendMessageTool has double-check for concurrent resume', async () => {
-    const content = await file('tools/SendMessageTool/SendMessageTool.ts').text()
+describe('chatGPTMesgTool race condition fix', () => {
+  test('chatGPTMesgTool has double-check for concurrent resume', async () => {
+    const content = await file('tools/chatGPTMesgTool/chatGPTMesgTool.ts').text()
 
     // Should have a second status check before resuming to prevent race
     expect(content).toContain('was concurrently resumed')

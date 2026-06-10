@@ -15,6 +15,8 @@ import { ColorPicker } from './ColorPicker.js';
 import { ModelSelector } from './ModelSelector.js';
 import { ToolSelector } from './ToolSelector.js';
 import { getAgentSourceDisplayName } from './utils.js';
+import { setAgentType } from 'src/services/api/browserLLMProvider.js';
+import { logForDebugging } from 'src/utils/debug.js';
 type Props = {
   agent: AgentDefinition;
   tools: Tools;
@@ -86,7 +88,14 @@ export function AgentEditor({
           }
         };
       });
-      onSaved(`Updated agent: ${chalk.bold(agent.agentType)}`);
+
+      // make a request to change the agent type in BrowserLLM
+      await setAgentType(agent.agentType).catch(err => {
+        logForDebugging('Failed to set agent type in BrowserLLM provider: ' + err);
+      });
+      logForDebugging(`[AgentEditor] Updated agent ${agent.agentType} with changes: ${JSON.stringify(changes)}`);
+      onSaved(`Updated Agent: ${chalk.bold(agent.agentType)}`);
+
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save agent');
@@ -133,19 +142,19 @@ export function AgentEditor({
     context: 'Confirmation'
   });
   const renderMenu = (): React.ReactNode => <Box flexDirection="column" tabIndex={0} autoFocus onKeyDown={handleMenuKeyDown}>
-      <Text dimColor>Source: {getAgentSourceDisplayName(agent.source)}</Text>
+    <Text dimColor>Source: {getAgentSourceDisplayName(agent.source)}</Text>
 
-      <Box marginTop={1} flexDirection="column">
-        {menuItems.map((item, index_1) => <Text key={item.label} color={index_1 === selectedMenuIndex ? 'suggestion' : undefined}>
-            {index_1 === selectedMenuIndex ? `${figures.pointer} ` : '  '}
-            {item.label}
-          </Text>)}
-      </Box>
+    <Box marginTop={1} flexDirection="column">
+      {menuItems.map((item, index_1) => <Text key={item.label} color={index_1 === selectedMenuIndex ? 'suggestion' : undefined}>
+        {index_1 === selectedMenuIndex ? `${figures.pointer} ` : '  '}
+        {item.label}
+      </Text>)}
+    </Box>
 
-      {error && <Box marginTop={1}>
-          <Text color="error">{error}</Text>
-        </Box>}
-    </Box>;
+    {error && <Box marginTop={1}>
+      <Text color="error">{error}</Text>
+    </Box>}
+  </Box>;
   switch (editMode) {
     case 'menu':
       return renderMenu();

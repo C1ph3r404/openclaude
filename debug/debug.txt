@@ -1,185 +1,216 @@
-2026-05-11T22:52:51.339Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /home/nate/.openclaude/settings.json
-2026-05-11T22:52:51.356Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /home/nate/Projects/OpenCode/openclaude/.openclaude/settings.json
-2026-05-11T22:52:51.356Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /home/nate/Projects/OpenCode/openclaude/.openclaude/settings.local.json
-2026-05-11T22:52:51.357Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /etc/claude-code/managed-settings.json
-2026-05-11T22:52:51.516Z [DEBUG] MDM settings load completed in 0ms
-2026-05-11T22:52:51.517Z [DEBUG] CA certs: Config fallback - globalEnv keys: , settingsEnv keys: none
-2026-05-11T22:52:51.519Z [DEBUG] [init] configureGlobalMTLS starting
-2026-05-11T22:52:51.519Z [DEBUG] [init] configureGlobalMTLS complete
-2026-05-11T22:52:51.519Z [DEBUG] [init] configureGlobalAgents starting
-2026-05-11T22:52:51.519Z [DEBUG] CA certs: useSystemCA=false, extraCertsPath=undefined
-2026-05-11T22:52:51.519Z [DEBUG] [init] configureGlobalAgents complete
-2026-05-11T22:52:51.520Z [DEBUG] Error log sink initialized
-2026-05-11T22:52:51.524Z [DEBUG] [STARTUP] Loading MCP configs...
-2026-05-11T22:52:51.530Z [DEBUG] [ToolSearch:optimistic] mode=standard, ENABLE_TOOL_SEARCH=undefined, result=false
-2026-05-11T22:52:51.531Z [DEBUG] [STARTUP] Running setup()...
-2026-05-11T22:52:51.532Z [DEBUG] Loading skills from: managed=/etc/claude-code/.claude/skills, user=/home/nate/.openclaude/skills, project=[]
-2026-05-11T22:52:51.535Z [DEBUG] Error log sink initialized
-2026-05-11T22:52:51.599Z [DEBUG] installed_plugins.json doesn't exist, returning empty V2 object
-2026-05-11T22:52:51.599Z [DEBUG] Found 0 plugins (0 enabled, 0 disabled)
-2026-05-11T22:52:51.600Z [DEBUG] getPluginSkills: Processing 0 enabled plugins
-2026-05-11T22:52:51.600Z [DEBUG] Registered 0 hooks from 0 plugins
-2026-05-11T22:52:51.600Z [DEBUG] Total plugin skills loaded: 0
-2026-05-11T22:52:51.600Z [DEBUG] Total plugin commands loaded: 0
-2026-05-11T22:52:51.602Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /home/nate/.openclaude/agents: IO error for operation on /home/nate/.openclaude/agents: No such file or directory (os error 2)
+2026-06-09T22:06:46.605Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /home/nate/Projects/OpenCode/openclaude/.openclaude/settings.json
+2026-06-09T22:06:46.605Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /home/nate/Projects/OpenCode/openclaude/.openclaude/settings.local.json
+2026-06-09T22:06:46.605Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /etc/claude-code/managed-settings.json
+2026-06-09T22:06:46.622Z [DEBUG] MDM settings load completed in 0ms
+2026-06-09T22:06:46.623Z [DEBUG] CA certs: Config fallback - globalEnv keys: , settingsEnv keys: none
+2026-06-09T22:06:46.624Z [DEBUG] [init] configureGlobalMTLS starting
+2026-06-09T22:06:46.624Z [DEBUG] [init] configureGlobalMTLS complete
+2026-06-09T22:06:46.624Z [DEBUG] [init] configureGlobalAgents starting
+2026-06-09T22:06:46.625Z [DEBUG] CA certs: useSystemCA=false, extraCertsPath=undefined
+2026-06-09T22:06:46.625Z [DEBUG] [init] configureGlobalAgents complete
+2026-06-09T22:06:46.625Z [DEBUG] Error log sink initialized
+2026-06-09T22:06:46.630Z [DEBUG] Applying permission update: Adding 1 ask rule(s) to destination 'userSettings': ["WebFetch"]
+2026-06-09T22:06:46.630Z [DEBUG] [STARTUP] Loading MCP configs...
+2026-06-09T22:06:46.634Z [DEBUG] [ToolSearch:optimistic] mode=standard, ENABLE_TOOL_SEARCH=undefined, result=false
+2026-06-09T22:06:46.634Z [DEBUG] [STARTUP] Running setup()...
+2026-06-09T22:06:46.636Z [DEBUG] Loading skills from: managed=/etc/claude-code/.claude/skills, user=/home/nate/.openclaude/skills, project=[]
+2026-06-09T22:06:46.638Z [DEBUG] Error log sink initialized
+2026-06-09T22:06:46.705Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /etc/claude-code/.claude/agents: IO error for operation on /etc/claude-code/.claude/agents: No such file or directory (os error 2)
 ), 0 results
-2026-05-11T22:52:51.603Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /etc/claude-code/.claude/agents: IO error for operation on /etc/claude-code/.claude/agents: No such file or directory (os error 2)
+2026-06-09T22:06:46.705Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /home/nate/.openclaude/commands: IO error for operation on /home/nate/.openclaude/commands: No such file or directory (os error 2)
 ), 0 results
-2026-05-11T22:52:51.603Z [DEBUG] Total plugin agents loaded: 0
-2026-05-11T22:52:51.603Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /home/nate/.openclaude/commands: IO error for operation on /home/nate/.openclaude/commands: No such file or directory (os error 2)
+2026-06-09T22:06:46.705Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /etc/claude-code/.claude/commands: IO error for operation on /etc/claude-code/.claude/commands: No such file or directory (os error 2)
 ), 0 results
-2026-05-11T22:52:51.603Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /etc/claude-code/.claude/commands: IO error for operation on /etc/claude-code/.claude/commands: No such file or directory (os error 2)
-), 0 results
-2026-05-11T22:52:51.603Z [DEBUG] Loaded 0 unique skills (0 unconditional, 0 conditional, managed: 0, user: 0, project: 0, additional: 0, legacy commands: 0)
-2026-05-11T22:52:51.603Z [DEBUG] getSkills returning: 0 skill dir commands, 0 plugin skills, 6 bundled skills, 0 builtin plugin skills
-2026-05-11T22:52:51.604Z [DEBUG] Ripgrep first use test: PASSED (mode=system, path=rg)
-2026-05-11T22:52:51.605Z [DEBUG] [Claude in Chrome] Found chromium profiles: Default
-2026-05-11T22:52:51.612Z [DEBUG] [Claude in Chrome] Extension not found in any browser
-2026-05-11T22:52:51.613Z [DEBUG] Git remote URL: git@github-main:C1ph3r404/openclaude.git
-2026-05-11T22:52:51.613Z [DEBUG] Parsed repository: null from URL: git@github-main:C1ph3r404/openclaude.git
-2026-05-11T22:52:51.619Z [DEBUG] [STARTUP] setup() completed in 88ms
-2026-05-11T22:52:51.619Z [DEBUG] [STARTUP] Loading commands and agents...
-2026-05-11T22:52:51.619Z [DEBUG] [STARTUP] Commands and agents loaded in 0ms
-2026-05-11T22:52:51.622Z [DEBUG] Cleared CA certificates cache
-2026-05-11T22:52:51.622Z [DEBUG] Cleared mTLS configuration cache
-2026-05-11T22:52:51.622Z [DEBUG] Cleared proxy agent cache
-2026-05-11T22:52:51.622Z [DEBUG] CA certs: useSystemCA=false, extraCertsPath=undefined
-2026-05-11T22:52:51.651Z [DEBUG] Not in a GitHub repository, skipping path mapping update
-2026-05-11T22:52:51.652Z [DEBUG] [LSP MANAGER] initializeLspServerManager() called
-2026-05-11T22:52:51.652Z [DEBUG] [LSP MANAGER] Created manager instance, state=pending
-2026-05-11T22:52:51.652Z [DEBUG] [LSP MANAGER] Starting async initialization (generation 1)
-2026-05-11T22:52:51.653Z [DEBUG] Starting background startup prefetches
-2026-05-11T22:52:51.663Z [DEBUG] [Reconnection] computeInitialTeamContext: No teammate context set (not a teammate)
-2026-05-11T22:52:51.671Z [DEBUG] Preserving file permissions: 100600
-2026-05-11T22:52:51.671Z [DEBUG] Writing to temp file: /home/nate/.claude.json.tmp.568023.1778539971671
-2026-05-11T22:52:51.672Z [DEBUG] Temp file written successfully, size: 40026 bytes
-2026-05-11T22:52:51.672Z [DEBUG] Applied original permissions to temp file
-2026-05-11T22:52:51.672Z [DEBUG] Renaming /home/nate/.claude.json.tmp.568023.1778539971671 to /home/nate/.claude.json
-2026-05-11T22:52:51.672Z [DEBUG] File /home/nate/.claude.json written atomically
-2026-05-11T22:52:51.672Z [DEBUG] Total LSP servers loaded: 0
-2026-05-11T22:52:51.672Z [DEBUG] Initialized versioned plugins system with 0 plugins
-2026-05-11T22:52:51.673Z [DEBUG] [LSP SERVER MANAGER] getAllLspServers returned 0 server(s)
-2026-05-11T22:52:51.673Z [DEBUG] LSP manager initialized with 0 servers
-2026-05-11T22:52:51.674Z [DEBUG] LSP server manager initialized successfully
-2026-05-11T22:52:51.674Z [DEBUG] LSP notification handlers registered successfully for all 0 server(s)
-2026-05-11T22:52:51.697Z [DEBUG] [Ink:render] start
-2026-05-11T22:52:51.719Z [DEBUG] [keybindings] KeybindingSetup initialized with 139 bindings, 0 warnings
-2026-05-11T22:52:51.774Z [DEBUG] [FileIndex] getProjectFiles called, respectGitignore=true
-2026-05-11T22:52:51.774Z [DEBUG] [FileIndex] getFilesUsingGit called
-2026-05-11T22:52:51.784Z [DEBUG] [claudeai-mcp] Skipped: non-first-party provider
-2026-05-11T22:52:51.784Z [DEBUG] [keybindings] Skipping file watcher - user customization disabled
-2026-05-11T22:52:51.791Z [DEBUG] [ScheduledTasks] scheduler start() — enabled=false, hasTasks=false
-2026-05-11T22:52:51.801Z [DEBUG] [Ink:render] updateContainer complete
-2026-05-11T22:52:51.821Z [DEBUG] AutoUpdaterWrapper: Installation type: development
-2026-05-11T22:52:51.857Z [DEBUG] [auto-mode] verifyAutoModeGateAccess: enabledState=disabled disabledBySettings=false model=gpt-4o modelSupported=false disableFastModeBreakerFires=false carouselAvailable=false canEnterAuto=false
-2026-05-11T22:52:51.857Z [WARN] auto mode disabled: tengu_auto_mode_config.enabled === "disabled" (circuit breaker)
-2026-05-11T22:52:51.861Z [DEBUG] Official marketplace auto-install skipped: already_attempted
-2026-05-11T22:52:51.874Z [DEBUG] [auto-mode] kickOutOfAutoIfNeeded applying: ctx.mode=default ctx.prePlanMode=undefined reason=circuit-breaker
-2026-05-11T22:52:51.880Z [DEBUG] [3P telemetry] Waiting for remote managed settings before telemetry init
-2026-05-11T22:52:51.900Z [DEBUG] Found 0 plugins (0 enabled, 0 disabled)
-2026-05-11T22:52:51.962Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /home/nate/.openclaude/workflows: IO error for operation on /home/nate/.openclaude/workflows: No such file or directory (os error 2)
-), 0 results
-2026-05-11T22:52:51.962Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /etc/claude-code/.claude/workflows: IO error for operation on /etc/claude-code/.claude/workflows: No such file or directory (os error 2)
-), 0 results
-2026-05-11T22:52:51.962Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /home/nate/.openclaude/skills: IO error for operation on /home/nate/.openclaude/skills: No such file or directory (os error 2)
-), 0 results
-2026-05-11T22:52:51.962Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /etc/claude-code/.claude/skills: IO error for operation on /etc/claude-code/.claude/skills: No such file or directory (os error 2)
-), 0 results
-2026-05-11T22:52:51.962Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /home/nate/.openclaude/output-styles: IO error for operation on /home/nate/.openclaude/output-styles: No such file or directory (os error 2)
-), 0 results
-2026-05-11T22:52:51.962Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /etc/claude-code/.claude/output-styles: IO error for operation on /etc/claude-code/.claude/output-styles: No such file or directory (os error 2)
-), 0 results
-2026-05-11T22:52:51.962Z [DEBUG] [FileIndex] git ls-files (tracked) took 188ms
-2026-05-11T22:52:51.968Z [DEBUG] [LSP MANAGER] reinitializeLspServerManager() called
-2026-05-11T22:52:51.968Z [DEBUG] [LSP MANAGER] initializeLspServerManager() called
-2026-05-11T22:52:51.968Z [DEBUG] [LSP MANAGER] Created manager instance, state=pending
-2026-05-11T22:52:51.968Z [DEBUG] [LSP MANAGER] Starting async initialization (generation 2)
-2026-05-11T22:52:51.968Z [DEBUG] Loaded plugins - Enabled: 0, Disabled: 0, Commands: 0, Agents: 0, Errors: 0
-2026-05-11T22:52:51.969Z [DEBUG] Total LSP servers loaded: 0
-2026-05-11T22:52:51.969Z [DEBUG] [LSP SERVER MANAGER] getAllLspServers returned 0 server(s)
-2026-05-11T22:52:51.969Z [DEBUG] LSP manager initialized with 0 servers
-2026-05-11T22:52:51.969Z [DEBUG] LSP server manager initialized successfully
-2026-05-11T22:52:51.969Z [DEBUG] LSP notification handlers registered successfully for all 0 server(s)
-2026-05-11T22:52:51.969Z [DEBUG] [FileIndex] git ls-files: 2291 tracked files in 195ms
-2026-05-11T22:52:51.974Z [DEBUG] [FileIndex] using git ls-files result (2291 files)
-2026-05-11T22:52:51.985Z [DEBUG] [FileIndex] cache refresh completed in 211ms
-2026-05-11T22:52:51.987Z [DEBUG] [Bootstrap] Local OpenAI model discovery failed
-2026-05-11T22:52:51.988Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /home/nate/.openclaude/plugins/cache: IO error for operation on /home/nate/.openclaude/plugins/cache: No such file or directory (os error 2)
-), 0 results
-2026-05-11T22:52:51.992Z [DEBUG] [FileIndex] background untracked fetch: 0 files
-2026-05-11T22:52:52.000Z [ERROR] Error: Error: spawn gh ENOENT
+2026-06-09T22:06:46.705Z [DEBUG] Loaded 0 unique skills (0 unconditional, 0 conditional, managed: 0, user: 0, project: 0, additional: 0, legacy commands: 0)
+2026-06-09T22:06:46.706Z [DEBUG] Ripgrep first use test: PASSED (mode=builtin, path=/home/nate/Projects/OpenCode/openclaude/node_modules/@vscode/ripgrep-linux-x64/bin/rg)
+2026-06-09T22:06:46.707Z [DEBUG] installed_plugins.json doesn't exist, returning empty V2 object
+2026-06-09T22:06:46.708Z [DEBUG] Found 1 plugins (0 enabled, 1 disabled)
+2026-06-09T22:06:46.708Z [DEBUG] getPluginSkills: Processing 0 enabled plugins
+2026-06-09T22:06:46.708Z [DEBUG] Registered 0 hooks from 0 plugins
+2026-06-09T22:06:46.708Z [DEBUG] Total plugin skills loaded: 0
+2026-06-09T22:06:46.708Z [DEBUG] Total plugin commands loaded: 0
+2026-06-09T22:06:46.708Z [DEBUG] getSkills returning: 0 skill dir commands, 0 plugin skills, 6 bundled skills, 0 builtin plugin skills
+2026-06-09T22:06:46.712Z [DEBUG] [Claude in Chrome] Found chromium profiles: Default
+2026-06-09T22:06:46.726Z [DEBUG] [Claude in Chrome] Extension not found in any browser
+2026-06-09T22:06:46.730Z [DEBUG] Total plugin agents loaded: 0
+2026-06-09T22:06:46.732Z [DEBUG] Git remote URL: git@github-main:C1ph3r404/openclaude.git
+2026-06-09T22:06:46.732Z [DEBUG] Parsed repository: null from URL: git@github-main:C1ph3r404/openclaude.git
+2026-06-09T22:06:46.735Z [DEBUG] [STARTUP] setup() completed in 101ms
+2026-06-09T22:06:46.735Z [DEBUG] [STARTUP] Loading commands and agents...
+2026-06-09T22:06:46.735Z [DEBUG] [STARTUP] Commands and agents loaded in 0ms
+2026-06-09T22:06:46.767Z [DEBUG] Cleared CA certificates cache
+2026-06-09T22:06:46.767Z [DEBUG] Cleared mTLS configuration cache
+2026-06-09T22:06:46.767Z [DEBUG] Cleared proxy agent cache
+2026-06-09T22:06:46.767Z [DEBUG] CA certs: useSystemCA=false, extraCertsPath=undefined
+2026-06-09T22:06:46.768Z [DEBUG] Not in a GitHub repository, skipping path mapping update
+2026-06-09T22:06:46.768Z [DEBUG] [LSP MANAGER] initializeLspServerManager() called
+2026-06-09T22:06:46.768Z [DEBUG] [LSP MANAGER] Created manager instance, state=pending
+2026-06-09T22:06:46.768Z [DEBUG] [LSP MANAGER] Starting async initialization (generation 1)
+2026-06-09T22:06:46.768Z [DEBUG] Starting background startup prefetches
+2026-06-09T22:06:46.776Z [DEBUG] [Reconnection] computeInitialTeamContext: No teammate context set (not a teammate)
+2026-06-09T22:06:46.781Z [DEBUG] Preserving file permissions: 100600
+2026-06-09T22:06:46.781Z [DEBUG] Writing to temp file: /home/nate/.openclaude.json.tmp.40391.1781042806781
+2026-06-09T22:06:46.781Z [DEBUG] Temp file written successfully, size: 40811 bytes
+2026-06-09T22:06:46.781Z [DEBUG] Applied original permissions to temp file
+2026-06-09T22:06:46.781Z [DEBUG] Renaming /home/nate/.openclaude.json.tmp.40391.1781042806781 to /home/nate/.openclaude.json
+2026-06-09T22:06:46.781Z [DEBUG] File /home/nate/.openclaude.json written atomically
+2026-06-09T22:06:46.782Z [DEBUG] Total LSP servers loaded: 0
+2026-06-09T22:06:46.782Z [DEBUG] Initialized versioned plugins system with 0 plugins
+2026-06-09T22:06:46.782Z [DEBUG] [LSP SERVER MANAGER] getAllLspServers returned 0 server(s)
+2026-06-09T22:06:46.782Z [DEBUG] LSP manager initialized with 0 servers
+2026-06-09T22:06:46.783Z [DEBUG] LSP server manager initialized successfully
+2026-06-09T22:06:46.783Z [DEBUG] LSP notification handlers registered successfully for all 0 server(s)
+2026-06-09T22:06:46.799Z [DEBUG] [Ink:render] start
+2026-06-09T22:06:46.816Z [DEBUG] [keybindings] KeybindingSetup initialized with 140 bindings, 0 warnings
+2026-06-09T22:06:46.865Z [DEBUG] [FileIndex] getProjectFiles called, respectGitignore=true
+2026-06-09T22:06:46.865Z [DEBUG] [FileIndex] getFilesUsingGit called
+2026-06-09T22:06:46.874Z [DEBUG] [keybindings] Skipping file watcher - user customization disabled
+2026-06-09T22:06:46.882Z [DEBUG] [ScheduledTasks] scheduler start() — enabled=false, hasTasks=false
+2026-06-09T22:06:46.895Z [DEBUG] [Ink:render] updateContainer complete
+2026-06-09T22:06:46.913Z [DEBUG] AutoUpdaterWrapper: Installation type: development
+2026-06-09T22:06:46.942Z [DEBUG] [auto-mode] verifyAutoModeGateAccess: enabledState=disabled disabledBySettings=false model=gpt-4o modelSupported=false disableFastModeBreakerFires=false carouselAvailable=false canEnterAuto=false
+2026-06-09T22:06:46.942Z [WARN] auto mode disabled: tengu_auto_mode_config.enabled === "disabled" (circuit breaker)
+2026-06-09T22:06:46.954Z [DEBUG] [auto-mode] kickOutOfAutoIfNeeded applying: ctx.mode=default ctx.prePlanMode=undefined reason=circuit-breaker
+2026-06-09T22:06:46.964Z [ERROR] Error: Error: spawn gh ENOENT
     at ChildProcess._handle.onexit (node:internal/child_process:286:19)
     at onErrorNT (node:internal/child_process:507:16)
     at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
-2026-05-11T22:52:52.004Z [DEBUG] No CLAUDE.md/rules files found
-2026-05-11T22:52:53.360Z [DEBUG] Remote settings: No settings found (404)
-2026-05-11T22:52:53.360Z [DEBUG] Programmatic settings change notification for policySettings
-2026-05-11T22:52:53.361Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /home/nate/.openclaude/settings.json
-2026-05-11T22:52:53.361Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /home/nate/Projects/OpenCode/openclaude/.openclaude/settings.json
-2026-05-11T22:52:53.361Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /home/nate/Projects/OpenCode/openclaude/.openclaude/settings.local.json
-2026-05-11T22:52:53.361Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /etc/claude-code/managed-settings.json
-2026-05-11T22:52:53.361Z [DEBUG] Plugin hooks: skipping reload, plugin-affecting settings unchanged
-2026-05-11T22:52:53.362Z [DEBUG] Settings changed from policySettings, updating app state
-2026-05-11T22:52:53.362Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /etc/claude-code/managed-settings.json
-2026-05-11T22:52:53.362Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /home/nate/.openclaude/settings.json
-2026-05-11T22:52:53.362Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /home/nate/Projects/OpenCode/openclaude/.openclaude/settings.json
-2026-05-11T22:52:53.362Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /home/nate/Projects/OpenCode/openclaude/.openclaude/settings.local.json
-2026-05-11T22:52:53.363Z [DEBUG] Replacing all allow rules for destination 'userSettings' with 0 rule(s): []
-2026-05-11T22:52:53.363Z [DEBUG] Replacing all deny rules for destination 'userSettings' with 0 rule(s): []
-2026-05-11T22:52:53.363Z [DEBUG] Replacing all ask rules for destination 'userSettings' with 0 rule(s): []
-2026-05-11T22:52:53.363Z [DEBUG] Replacing all allow rules for destination 'projectSettings' with 0 rule(s): []
-2026-05-11T22:52:53.363Z [DEBUG] Replacing all deny rules for destination 'projectSettings' with 0 rule(s): []
-2026-05-11T22:52:53.363Z [DEBUG] Replacing all ask rules for destination 'projectSettings' with 0 rule(s): []
-2026-05-11T22:52:53.363Z [DEBUG] Replacing all allow rules for destination 'localSettings' with 0 rule(s): []
-2026-05-11T22:52:53.363Z [DEBUG] Replacing all deny rules for destination 'localSettings' with 0 rule(s): []
-2026-05-11T22:52:53.363Z [DEBUG] Replacing all ask rules for destination 'localSettings' with 0 rule(s): []
-2026-05-11T22:52:53.372Z [DEBUG] [3P telemetry] Remote managed settings loaded, initializing telemetry
-2026-05-11T22:52:53.373Z [DEBUG] Cleared CA certificates cache
-2026-05-11T22:52:53.373Z [DEBUG] Cleared mTLS configuration cache
-2026-05-11T22:52:53.373Z [DEBUG] Cleared proxy agent cache
-2026-05-11T22:52:53.373Z [DEBUG] CA certs: useSystemCA=false, extraCertsPath=undefined
-2026-05-11T22:52:53.373Z [DEBUG] [3P telemetry] isTelemetryEnabled=false (CLAUDE_CODE_ENABLE_TELEMETRY=undefined)
-2026-05-11T22:53:52.014Z [ERROR] Error: Error: spawn gh ENOENT
+2026-06-09T22:06:46.976Z [DEBUG] [claudeai-mcp] Skipped: non-first-party provider
+2026-06-09T22:06:46.996Z [DEBUG] XTVERSION: terminal identified as "xterm.js(6.1.0-beta.197)"
+2026-06-09T22:06:47.004Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /home/nate/.openclaude/workflows: IO error for operation on /home/nate/.openclaude/workflows: No such file or directory (os error 2)
+), 0 results
+2026-06-09T22:06:47.004Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /etc/claude-code/.claude/workflows: IO error for operation on /etc/claude-code/.claude/workflows: No such file or directory (os error 2)
+), 0 results
+2026-06-09T22:06:47.004Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /home/nate/.openclaude/skills: IO error for operation on /home/nate/.openclaude/skills: No such file or directory (os error 2)
+), 0 results
+2026-06-09T22:06:47.004Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /etc/claude-code/.claude/skills: IO error for operation on /etc/claude-code/.claude/skills: No such file or directory (os error 2)
+), 0 results
+2026-06-09T22:06:47.004Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /home/nate/.openclaude/output-styles: IO error for operation on /home/nate/.openclaude/output-styles: No such file or directory (os error 2)
+), 0 results
+2026-06-09T22:06:47.004Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /etc/claude-code/.claude/output-styles: IO error for operation on /etc/claude-code/.claude/output-styles: No such file or directory (os error 2)
+), 0 results
+2026-06-09T22:06:47.004Z [DEBUG] [FileIndex] git ls-files (tracked) took 139ms
+2026-06-09T22:06:47.007Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /home/nate/.openclaude/plugins/cache: IO error for operation on /home/nate/.openclaude/plugins/cache: No such file or directory (os error 2)
+), 0 results
+2026-06-09T22:06:47.007Z [DEBUG] [FileIndex] git ls-files: 2575 tracked files in 142ms
+2026-06-09T22:06:47.013Z [DEBUG] [FileIndex] using git ls-files result (2575 files)
+2026-06-09T22:06:47.020Z [DEBUG] [FileIndex] cache refresh completed in 156ms
+2026-06-09T22:06:47.021Z [DEBUG] Found 1 plugins (0 enabled, 1 disabled)
+2026-06-09T22:06:47.022Z [DEBUG] Official marketplace 'claude-plugins-official' already installed, skipping
+2026-06-09T22:06:47.023Z [DEBUG] Preserving file permissions: 100600
+2026-06-09T22:06:47.023Z [DEBUG] Writing to temp file: /home/nate/.openclaude.json.tmp.40391.1781042807023
+2026-06-09T22:06:47.023Z [DEBUG] Temp file written successfully, size: 40811 bytes
+2026-06-09T22:06:47.023Z [DEBUG] Applied original permissions to temp file
+2026-06-09T22:06:47.023Z [DEBUG] Renaming /home/nate/.openclaude.json.tmp.40391.1781042807023 to /home/nate/.openclaude.json
+2026-06-09T22:06:47.023Z [DEBUG] File /home/nate/.openclaude.json written atomically
+2026-06-09T22:06:47.024Z [DEBUG] Watching for changes in setting files /home/nate/.openclaude/settings.json...
+2026-06-09T22:06:47.028Z [DEBUG] [Bootstrap] Local OpenAI model discovery failed
+2026-06-09T22:06:47.029Z [DEBUG] [FileIndex] background untracked fetch: 0 files
+2026-06-09T22:06:47.053Z [DEBUG] [LSP MANAGER] reinitializeLspServerManager() called
+2026-06-09T22:06:47.053Z [DEBUG] [LSP MANAGER] initializeLspServerManager() called
+2026-06-09T22:06:47.053Z [DEBUG] [LSP MANAGER] Created manager instance, state=pending
+2026-06-09T22:06:47.053Z [DEBUG] [LSP MANAGER] Starting async initialization (generation 2)
+2026-06-09T22:06:47.054Z [DEBUG] Loaded plugins - Enabled: 0, Disabled: 1, Commands: 0, Agents: 0, Errors: 0
+2026-06-09T22:06:47.054Z [DEBUG] Total LSP servers loaded: 0
+2026-06-09T22:06:47.054Z [DEBUG] [LSP SERVER MANAGER] getAllLspServers returned 0 server(s)
+2026-06-09T22:06:47.054Z [DEBUG] LSP manager initialized with 0 servers
+2026-06-09T22:06:47.054Z [DEBUG] LSP server manager initialized successfully
+2026-06-09T22:06:47.054Z [DEBUG] LSP notification handlers registered successfully for all 0 server(s)
+2026-06-09T22:06:47.057Z [DEBUG] No CLAUDE.md/rules files found
+2026-06-09T22:06:47.096Z [DEBUG] [claudeai-mcp] Skipped: non-first-party provider
+2026-06-09T22:06:47.107Z [DEBUG] MCP server "ide": Starting connection with timeout of 30000ms
+2026-06-09T22:06:47.116Z [DEBUG] MCP server "ide": Successfully connected (transport: ws-ide) in 17ms
+2026-06-09T22:06:47.116Z [DEBUG] MCP server "ide": Connection established with capabilities: {"hasTools":true,"hasPrompts":false,"hasResources":false,"hasResourceSubscribe":false,"serverVersion":{"name":"Claude Code VSCode MCP","version":"2.1.168"}}
+2026-06-09T22:06:47.116Z [DEBUG] [MCP] Server "ide" connected with subscribe=false
+2026-06-09T22:06:48.394Z [DEBUG] Remote settings: No settings found (404)
+2026-06-09T22:06:48.394Z [DEBUG] Programmatic settings change notification for policySettings
+2026-06-09T22:06:48.395Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /home/nate/Projects/OpenCode/openclaude/.openclaude/settings.json
+2026-06-09T22:06:48.395Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /home/nate/Projects/OpenCode/openclaude/.openclaude/settings.local.json
+2026-06-09T22:06:48.395Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /etc/claude-code/managed-settings.json
+2026-06-09T22:06:48.395Z [DEBUG] Plugin hooks: skipping reload, plugin-affecting settings unchanged
+2026-06-09T22:06:48.395Z [DEBUG] Settings changed from policySettings, updating app state
+2026-06-09T22:06:48.396Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /etc/claude-code/managed-settings.json
+2026-06-09T22:06:48.396Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /home/nate/Projects/OpenCode/openclaude/.openclaude/settings.json
+2026-06-09T22:06:48.396Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /home/nate/Projects/OpenCode/openclaude/.openclaude/settings.local.json
+2026-06-09T22:06:48.396Z [DEBUG] Replacing all allow rules for destination 'userSettings' with 0 rule(s): []
+2026-06-09T22:06:48.397Z [DEBUG] Replacing all deny rules for destination 'userSettings' with 0 rule(s): []
+2026-06-09T22:06:48.397Z [DEBUG] Replacing all ask rules for destination 'userSettings' with 0 rule(s): []
+2026-06-09T22:06:48.397Z [DEBUG] Replacing all allow rules for destination 'projectSettings' with 0 rule(s): []
+2026-06-09T22:06:48.397Z [DEBUG] Replacing all deny rules for destination 'projectSettings' with 0 rule(s): []
+2026-06-09T22:06:48.397Z [DEBUG] Replacing all ask rules for destination 'projectSettings' with 0 rule(s): []
+2026-06-09T22:06:48.397Z [DEBUG] Replacing all allow rules for destination 'localSettings' with 0 rule(s): []
+2026-06-09T22:06:48.397Z [DEBUG] Replacing all deny rules for destination 'localSettings' with 0 rule(s): []
+2026-06-09T22:06:48.397Z [DEBUG] Replacing all ask rules for destination 'localSettings' with 0 rule(s): []
+2026-06-09T22:06:48.397Z [DEBUG] Replacing all ask rules for destination 'userSettings' with 1 rule(s): ["WebFetch"]
+2026-06-09T22:06:50.220Z [DEBUG] [onSubmit] early return: suggestions showing (count=2)
+2026-06-09T22:06:50.238Z [DEBUG] performStartupChecks called
+2026-06-09T22:06:50.238Z [DEBUG] Starting background plugin installations
+2026-06-09T22:06:50.239Z [DEBUG] Plugin autoupdate: skipped (auto-updater disabled)
+2026-06-09T22:06:50.260Z [DEBUG] AutoUpdaterWrapper: Installation type: development
+2026-06-09T22:06:50.260Z [DEBUG] performBackgroundPluginInstallations called
+2026-06-09T22:06:50.278Z [ERROR] Error: Error: spawn gh ENOENT
     at ChildProcess._handle.onexit (node:internal/child_process:286:19)
     at onErrorNT (node:internal/child_process:507:16)
     at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
-2026-05-11T22:54:52.021Z [ERROR] Error: Error: spawn gh ENOENT
+2026-06-09T22:06:50.278Z [ERROR] Error: Error: spawn gh ENOENT
     at ChildProcess._handle.onexit (node:internal/child_process:286:19)
     at onErrorNT (node:internal/child_process:507:16)
     at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
-2026-05-11T22:55:52.028Z [ERROR] Error: Error: spawn gh ENOENT
+2026-06-09T22:06:52.656Z [DEBUG] Full reset (shrink->below): prevHeight=26, nextHeight=13, viewport=23
+2026-06-09T22:06:55.144Z [DEBUG] [AgentsMenu] Set active agent to code-analyzer
+2026-06-09T22:06:55.144Z [DEBUG] [BrowserLLM Provider] Setting agent type to: code-analyzer
+2026-06-09T22:06:55.164Z [DEBUG] [auto-mode] verifyAutoModeGateAccess: enabledState=disabled disabledBySettings=false model=gpt-4o modelSupported=false disableFastModeBreakerFires=false carouselAvailable=false canEnterAuto=false
+2026-06-09T22:06:55.164Z [WARN] auto mode disabled: tengu_auto_mode_config.enabled === "disabled" (circuit breaker)
+2026-06-09T22:06:55.164Z [DEBUG] [auto-mode] kickOutOfAutoIfNeeded applying: ctx.mode=default ctx.prePlanMode=undefined reason=circuit-breaker
+2026-06-09T22:07:41.293Z [DEBUG] FileHistory: Added snapshot for eff772ab-ea52-4d85-878f-e1e7170c8662, tracking 0 files
+2026-06-09T22:07:41.295Z [DEBUG] [useDeferredValue] Messages deferred by 3 (0→3)
+2026-06-09T22:07:41.331Z [DEBUG] [FileIndex] getProjectFiles called, respectGitignore=true
+2026-06-09T22:07:41.332Z [DEBUG] [FileIndex] getFilesUsingGit called
+2026-06-09T22:07:41.388Z [DEBUG] Full reset (shrink->below): prevHeight=29, nextHeight=11, viewport=23
+2026-06-09T22:07:41.388Z [DEBUG] AutoUpdaterWrapper: Installation type: development
+2026-06-09T22:07:41.389Z [DEBUG] [useDeferredValue] Messages deferred by 3 (0→3)
+2026-06-09T22:07:41.398Z [DEBUG] [useDeferredValue] Messages deferred by 3 (0→3)
+2026-06-09T22:07:41.419Z [ERROR] Error: Error: spawn gh ENOENT
     at ChildProcess._handle.onexit (node:internal/child_process:286:19)
     at onErrorNT (node:internal/child_process:507:16)
     at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
-2026-05-11T22:56:35.513Z [DEBUG] LSP server manager shut down successfully
-2026-05-11T22:56:35.515Z [ERROR] Error: Error: console.error: Error getting current chat ID from BrowserLLM: [TypeError: fetch failed] {
-  [cause]: AggregateError [ECONNREFUSED]: 
-      at internalConnectMultiple (node:net:1193:18)
-      at afterConnectMultiple (node:net:1783:7) {
-    code: 'ECONNREFUSED',
-    [errors]: [ [Error], [Error] ]
-  }
-}
-    at console.toError2 (file:///home/nate/Projects/OpenCode/openclaude/dist/cli.mjs:142581:45)
-    at getCurrentChatId (file:///home/nate/Projects/OpenCode/openclaude/dist/cli.mjs:114971:13)
-    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
-    at async file:///home/nate/Projects/OpenCode/openclaude/dist/cli.mjs:558915:24
-    at async Promise.all (index 9)
-    at async runCleanupFunctions (file:///home/nate/Projects/OpenCode/openclaude/dist/cli.mjs:10583:3)
-    at async file:///home/nate/Projects/OpenCode/openclaude/dist/cli.mjs:260633:9
-    at async gracefulShutdown (file:///home/nate/Projects/OpenCode/openclaude/dist/cli.mjs:260636:5)
-    at async Object.call67 (file:///home/nate/Projects/OpenCode/openclaude/dist/cli.mjs:488847:3)
-    at async file:///home/nate/Projects/OpenCode/openclaude/dist/cli.mjs:558784:28
-2026-05-11T22:56:35.517Z [WARN] [stderr] [?25h
-2026-05-11T22:56:35.519Z [DEBUG] Preserving file permissions: 100600
-2026-05-11T22:56:35.519Z [DEBUG] Writing to temp file: /home/nate/.claude.json.tmp.568023.1778540195519
-2026-05-11T22:56:35.519Z [DEBUG] Temp file written successfully, size: 40028 bytes
-2026-05-11T22:56:35.519Z [DEBUG] Applied original permissions to temp file
-2026-05-11T22:56:35.519Z [DEBUG] Renaming /home/nate/.claude.json.tmp.568023.1778540195519 to /home/nate/.claude.json
-2026-05-11T22:56:35.519Z [DEBUG] File /home/nate/.claude.json written atomically
-2026-05-11T22:56:35.521Z [DEBUG] Preserving file permissions: 100600
-2026-05-11T22:56:35.521Z [DEBUG] Writing to temp file: /home/nate/.claude.json.tmp.568023.1778540195521
-2026-05-11T22:56:35.521Z [DEBUG] Temp file written successfully, size: 40027 bytes
-2026-05-11T22:56:35.521Z [DEBUG] Applied original permissions to temp file
-2026-05-11T22:56:35.521Z [DEBUG] Renaming /home/nate/.claude.json.tmp.568023.1778540195521 to /home/nate/.claude.json
-2026-05-11T22:56:35.524Z [DEBUG] File /home/nate/.claude.json written atomically
+2026-06-09T22:07:41.419Z [ERROR] Error: Error: spawn gh ENOENT
+    at ChildProcess._handle.onexit (node:internal/child_process:286:19)
+    at onErrorNT (node:internal/child_process:507:16)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+2026-06-09T22:07:41.423Z [DEBUG] [BROWSERLLM] recordTranscript: hasAssistantMsg=false, alreadySaved=undefined
+2026-06-09T22:07:41.426Z [DEBUG] [useDeferredValue] Messages deferred by 3 (0→3)
+2026-06-09T22:07:41.437Z [DEBUG] Preserving file permissions: 100600
+2026-06-09T22:07:41.437Z [DEBUG] Writing to temp file: /home/nate/.openclaude.json.tmp.40391.1781042861437
+2026-06-09T22:07:41.437Z [DEBUG] Temp file written successfully, size: 40811 bytes
+2026-06-09T22:07:41.437Z [DEBUG] Applied original permissions to temp file
+2026-06-09T22:07:41.437Z [DEBUG] Renaming /home/nate/.openclaude.json.tmp.40391.1781042861437 to /home/nate/.openclaude.json
+2026-06-09T22:07:41.437Z [DEBUG] File /home/nate/.openclaude.json written atomically
+2026-06-09T22:07:41.439Z [DEBUG] [useDeferredValue] Messages deferred by 3 (0→3)
+2026-06-09T22:07:41.461Z [DEBUG] [FileIndex] git ls-files (tracked) took 129ms
+2026-06-09T22:07:41.462Z [DEBUG] [FileIndex] git ls-files: 2575 tracked files in 129ms
+2026-06-09T22:07:41.469Z [DEBUG] [FileIndex] using git ls-files result (2575 files)
+2026-06-09T22:07:41.471Z [DEBUG] [FileIndex] skipped index rebuild — tracked paths unchanged
+2026-06-09T22:07:41.471Z [DEBUG] [FileIndex] cache refresh completed in 140ms
+2026-06-09T22:07:41.475Z [DEBUG] [FileIndex] background untracked fetch: 0 files
+2026-06-09T22:08:02.542Z [DEBUG] [BrowserLLM Provider] Received response for set-main-agentType: 200 OK
+2026-06-09T22:08:41.432Z [ERROR] Error: Error: spawn gh ENOENT
+    at ChildProcess._handle.onexit (node:internal/child_process:286:19)
+    at onErrorNT (node:internal/child_process:507:16)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+2026-06-09T22:09:10.890Z [DEBUG] MCP server "ide": WebSocket transport closed/disconnected, attempting automatic reconnection
+2026-06-09T22:09:10.890Z [DEBUG] LSP server manager shut down successfully
+2026-06-09T22:09:10.892Z [DEBUG] MCP server "ide": Starting connection with timeout of 30000ms
+2026-06-09T22:09:10.897Z [WARN] [stderr] [?25h
+2026-06-09T22:09:10.899Z [DEBUG] Preserving file permissions: 100600
+2026-06-09T22:09:10.899Z [DEBUG] Writing to temp file: /home/nate/.openclaude.json.tmp.40391.1781042950899
+2026-06-09T22:09:10.899Z [DEBUG] Temp file written successfully, size: 40810 bytes
+2026-06-09T22:09:10.899Z [DEBUG] Applied original permissions to temp file
+2026-06-09T22:09:10.899Z [DEBUG] Renaming /home/nate/.openclaude.json.tmp.40391.1781042950899 to /home/nate/.openclaude.json
+2026-06-09T22:09:10.899Z [DEBUG] File /home/nate/.openclaude.json written atomically
+2026-06-09T22:09:10.900Z [DEBUG] Preserving file permissions: 100600
+2026-06-09T22:09:10.900Z [DEBUG] Writing to temp file: /home/nate/.openclaude.json.tmp.40391.1781042950900
+2026-06-09T22:09:10.900Z [DEBUG] Temp file written successfully, size: 40809 bytes
+2026-06-09T22:09:10.900Z [DEBUG] Applied original permissions to temp file
+2026-06-09T22:09:10.900Z [DEBUG] Renaming /home/nate/.openclaude.json.tmp.40391.1781042950900 to /home/nate/.openclaude.json
+2026-06-09T22:09:10.904Z [DEBUG] File /home/nate/.openclaude.json written atomically

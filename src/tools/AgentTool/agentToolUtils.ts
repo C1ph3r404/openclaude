@@ -140,11 +140,11 @@ export function resolveAgentTools(
   const filteredAvailableTools = isMainThread
     ? availableTools
     : filterToolsForAgent({
-        tools: availableTools,
-        isBuiltIn: source === 'built-in',
-        isAsync,
-        permissionMode,
-      })
+      tools: availableTools,
+      isBuiltIn: source === 'built-in',
+      isAsync,
+      permissionMode,
+    })
 
   // Create a set of disallowed tool names for quick lookup
   const disallowedToolSet = new Set(
@@ -229,7 +229,7 @@ export const agentToolResultSchema = lazySchema(() =>
     agentId: z.string(),
     // Optional: older persisted sessions won't have this (resume replays
     // results verbatim without re-validation). Used to gate the sync
-    // result trailer — one-shot built-ins skip the SendMessage hint.
+    // result trailer — one-shot built-ins skip the chatGPTMesg hint.
     agentType: z.string().optional(),
     content: z.array(z.object({ type: z.literal('text'), text: z.string() })),
     totalToolUseCount: z.number(),
@@ -542,14 +542,14 @@ export async function runAsyncAgentLifecycle({
     )
     const onCacheSafeParams = enableSummarization
       ? (params: CacheSafeParams) => {
-          const { stop } = startAgentSummarization(
-            taskId,
-            asAgentId(taskId),
-            params,
-            rootSetAppState,
-          )
-          stopSummarization = stop
-        }
+        const { stop } = startAgentSummarization(
+          taskId,
+          asAgentId(taskId),
+          params,
+          rootSetAppState,
+        )
+        stopSummarization = stop
+      }
       : undefined
     for await (const message of makeStream(onCacheSafeParams)) {
       agentMessages.push(message)

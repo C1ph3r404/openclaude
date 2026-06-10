@@ -2,7 +2,7 @@ import React from 'react';
 import { MessageResponse } from '../../components/MessageResponse.js';
 import { Text } from '../../ink.js';
 import { jsonParse } from '../../utils/slowOperations.js';
-import type { Input, SendMessageToolOutput } from './SendMessageTool.js';
+import type { Input, chatGPTMesgToolOutput } from './chatGPTMesgTool.js';
 export function renderToolUseMessage(input: Partial<Input>): React.ReactNode {
   if (typeof input.message !== 'object' || input.message === null) {
     return null;
@@ -12,12 +12,12 @@ export function renderToolUseMessage(input: Partial<Input>): React.ReactNode {
   }
   return null;
 }
-export function renderToolResultMessage(content: SendMessageToolOutput | string, _progressMessages: unknown, {
+export function renderToolResultMessage(content: chatGPTMesgToolOutput | string, _progressMessages: unknown, {
   verbose
 }: {
   verbose: boolean;
 }): React.ReactNode {
-  const result: SendMessageToolOutput = typeof content === 'string' ? jsonParse(content) : content;
+  const result: chatGPTMesgToolOutput = typeof content === 'string' ? jsonParse(content) : content;
   if ('routing' in result && result.routing) {
     return null;
   }
@@ -25,6 +25,6 @@ export function renderToolResultMessage(content: SendMessageToolOutput | string,
     return null;
   }
   return <MessageResponse>
-      <Text dimColor>{result.message}</Text>
-    </MessageResponse>;
+    <Text dimColor>{result.message}</Text>
+  </MessageResponse>;
 }

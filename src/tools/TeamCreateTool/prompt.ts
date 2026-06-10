@@ -42,7 +42,7 @@ This creates:
 4. **Assign tasks** using TaskUpdate with \`owner\` to give tasks to idle teammates
 5. **Teammates work on assigned tasks** and mark them completed via TaskUpdate
 6. **Teammates go idle between turns** - after each turn, teammates automatically go idle and send a notification. IMPORTANT: Be patient with idle teammates! Don't comment on their idleness until it actually impacts your work.
-7. **Shutdown your team** - when the task is completed, gracefully shut down your teammates via SendMessage with \`message: {type: "shutdown_request"}\`.
+7. **Shutdown your team** - when the task is completed, gracefully shut down your teammates via chatGPTMesg with \`message: {type: "shutdown_request"}\`.
 
 ## Task Ownership
 
@@ -104,7 +104,7 @@ Teammates should:
 
 **IMPORTANT notes for communication with your team**:
 - Do not use terminal tools to view your team's activity; always send a message to your teammates (and remember, refer to them by name).
-- Your team cannot hear you if you do not use the SendMessage tool. Always send a message to your teammates if you are responding to them.
+- Your team cannot hear you if you do not use the chatGPTMesg tool. Always send a message to your teammates if you are responding to them.
 - Do NOT send structured JSON status messages like \`{"type":"idle",...}\` or \`{"type":"task_completed",...}\`. Just communicate in plain text when you need to message teammates.
 - Use TaskUpdate to mark tasks completed.
 - If you are an agent in the team, the system will automatically send idle notifications to the team lead when you stop.

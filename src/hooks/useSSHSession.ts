@@ -1,7 +1,7 @@
 /**
  * REPL integration hook for `claude ssh` sessions.
  *
- * Sibling to useDirectConnect — same shape (isRemoteMode/sendMessage/
+ * Sibling to useDirectConnect — same shape (isRemoteMode/chatGPTMesg/
  * cancelRequest/disconnect), same REPL wiring, but drives an SSH child
  * process instead of a WebSocket. Kept separate rather than generalizing
  * useDirectConnect because the lifecycle differs: the ssh process and auth
@@ -32,7 +32,7 @@ import type { RemoteMessageContent } from '../utils/teleport/api.js'
 
 type UseSSHSessionResult = {
   isRemoteMode: boolean
-  sendMessage: (content: RemoteMessageContent) => Promise<boolean>
+  chatGPTMesg: (content: RemoteMessageContent) => Promise<boolean>
   cancelRequest: () => void
   disconnect: () => void
 }
@@ -120,7 +120,7 @@ export function useSSHSession({
           toolUseID: request.tool_use_id,
           permissionResult,
           permissionPromptStartTimeMs: Date.now(),
-          onUserInteraction() {},
+          onUserInteraction() { },
           onAbort() {
             manager.respondToPermissionRequest(requestId, {
               behavior: 'deny',
@@ -149,7 +149,7 @@ export function useSSHSession({
               q.filter(i => i.toolUseID !== request.tool_use_id),
             )
           },
-          async recheckPermission() {},
+          async recheckPermission() { },
         }
 
         setToolUseConfirmQueue(q => [...q, toolUseConfirm])
@@ -213,12 +213,12 @@ export function useSSHSession({
     }
   }, [session, setMessages, setIsLoading, setToolUseConfirmQueue])
 
-  const sendMessage = useCallback(
+  const chatGPTMesg = useCallback(
     async (content: RemoteMessageContent): Promise<boolean> => {
       const m = managerRef.current
       if (!m) return false
       setIsLoading(true)
-      return m.sendMessage(content)
+      return m.chatGPTMesg(content)
     },
     [setIsLoading],
   )
@@ -235,7 +235,7 @@ export function useSSHSession({
   }, [])
 
   return useMemo(
-    () => ({ isRemoteMode, sendMessage, cancelRequest, disconnect }),
-    [isRemoteMode, sendMessage, cancelRequest, disconnect],
+    () => ({ isRemoteMode, chatGPTMesg, cancelRequest, disconnect }),
+    [isRemoteMode, chatGPTMesg, cancelRequest, disconnect],
   )
 }

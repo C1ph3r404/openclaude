@@ -132,7 +132,7 @@ export type LocalAgentTaskState = TaskStateBase & {
   lastReportedTokenCount: number;
   // Whether the task has been backgrounded (false = foreground running, true = backgrounded)
   isBackgrounded: boolean;
-  // Messages queued mid-turn via SendMessage, drained at tool-round boundaries
+  // Messages queued mid-turn via chatGPTMesg, drained at tool-round boundaries
   pendingMessages: string[];
   // UI is holding this task: blocks eviction, enables stream-append, triggers
   // disk bootstrap. Set by enterTeammateView. Separate from viewingAgentTaskId

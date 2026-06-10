@@ -31,7 +31,7 @@ import type {
  *
  * The adapter handles:
  * - spawn(): Creates a pane and sends the Claude CLI command to it
- * - sendMessage(): Writes to the teammate's file-based mailbox
+ * - chatGPTMesg(): Writes to the teammate's file-based mailbox
  * - terminate(): Sends a shutdown request via mailbox
  * - kill(): Kills the pane via the backend
  * - isActive(): Checks if the pane is still running
@@ -213,9 +213,9 @@ export class PaneBackendExecutor implements TeammateExecutor {
    *
    * All teammates (pane and in-process) use the same mailbox mechanism.
    */
-  async sendMessage(agentId: string, message: TeammateMessage): Promise<void> {
+  async chatGPTMesg(agentId: string, message: TeammateMessage): Promise<void> {
     logForDebugging(
-      `[PaneBackendExecutor] sendMessage() to ${agentId}: ${message.text.substring(0, 50)}...`,
+      `[PaneBackendExecutor] chatGPTMesg() to ${agentId}: ${message.text.substring(0, 50)}...`,
     )
 
     const parsed = parseAgentId(agentId)
@@ -239,7 +239,7 @@ export class PaneBackendExecutor implements TeammateExecutor {
     )
 
     logForDebugging(
-      `[PaneBackendExecutor] sendMessage() completed for ${agentId}`,
+      `[PaneBackendExecutor] chatGPTMesg() completed for ${agentId}`,
     )
   }
 

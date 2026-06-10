@@ -36,8 +36,8 @@ const teamMemOps = feature('TEAMMEM')
   : null
 const SNIP_TOOL_NAME = feature('HISTORY_SNIP')
   ? (
-      require('../tools/SnipTool/prompt.js') as typeof import('../tools/SnipTool/prompt.js')
-    ).SNIP_TOOL_NAME
+    require('../tools/SnipTool/prompt.js') as typeof import('../tools/SnipTool/prompt.js')
+  ).SNIP_TOOL_NAME
   : null
 /* eslint-enable @typescript-eslint/no-require-imports */
 
@@ -1099,7 +1099,7 @@ export function summarizeRecentActivities(
     return getSearchReadSummaryText(searchCount, readCount, true)
   }
   // Fall back to most recent activity with a description (some tools like
-  // SendMessage don't implement getActivityDescription, so search backward)
+  // chatGPTMesg don't implement getActivityDescription, so search backward)
   for (let i = activities.length - 1; i >= 0; i--) {
     if (activities[i]?.activityDescription) {
       return activities[i]!.activityDescription

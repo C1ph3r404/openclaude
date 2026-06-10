@@ -9,7 +9,7 @@ import { AGENT_TOOL_NAME } from '../tools/AgentTool/constants.js'
 import { BASH_TOOL_NAME } from '../tools/BashTool/toolName.js'
 import { FILE_EDIT_TOOL_NAME } from '../tools/FileEditTool/constants.js'
 import { FILE_READ_TOOL_NAME } from '../tools/FileReadTool/prompt.js'
-import { SEND_MESSAGE_TOOL_NAME } from '../tools/SendMessageTool/constants.js'
+import { SEND_MESSAGE_TOOL_NAME } from 'src/tools/SendMessageTool/constants.js'
 import { SYNTHETIC_OUTPUT_TOOL_NAME } from '../tools/SyntheticOutputTool/SyntheticOutputTool.js'
 import { TASK_STOP_TOOL_NAME } from '../tools/TaskStopTool/prompt.js'
 import { TEAM_CREATE_TOOL_NAME } from '../tools/TeamCreateTool/constants.js'
@@ -87,12 +87,12 @@ export function getCoordinatorUserContext(
 
   const workerTools = isEnvTruthy(process.env.CLAUDE_CODE_SIMPLE)
     ? [BASH_TOOL_NAME, FILE_READ_TOOL_NAME, FILE_EDIT_TOOL_NAME]
-        .sort()
-        .join(', ')
+      .sort()
+      .join(', ')
     : Array.from(ASYNC_AGENT_ALLOWED_TOOLS)
-        .filter(name => !INTERNAL_WORKER_TOOLS.has(name))
-        .sort()
-        .join(', ')
+      .filter(name => !INTERNAL_WORKER_TOOLS.has(name))
+      .sort()
+      .join(', ')
 
   let content = `Workers spawned via the ${AGENT_TOOL_NAME} tool have access to these tools: ${workerTools}`
 
@@ -161,7 +161,7 @@ Format:
 
 - \`<result>\` and \`<usage>\` are optional sections
 - The \`<summary>\` describes the outcome: "completed", "failed: {error}", or "was stopped"
-- The \`<task-id>\` value is the agent ID — use SendMessage with that ID as \`to\` to continue that worker
+- The \`<task-id>\` value is the agent ID — use chatGPTMesg with that ID as \`to\` to continue that worker
 
 ### Example
 

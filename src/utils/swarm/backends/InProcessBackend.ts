@@ -147,9 +147,9 @@ export class InProcessBackend implements TeammateExecutor {
    *
    * All teammates use file-based mailboxes for simplicity.
    */
-  async sendMessage(agentId: string, message: TeammateMessage): Promise<void> {
+  async chatGPTMesg(agentId: string, message: TeammateMessage): Promise<void> {
     logForDebugging(
-      `[InProcessBackend] sendMessage() to ${agentId}: ${message.text.substring(0, 50)}...`,
+      `[InProcessBackend] chatGPTMesg() to ${agentId}: ${message.text.substring(0, 50)}...`,
     )
 
     // Parse agentId to get agentName and teamName
@@ -176,7 +176,7 @@ export class InProcessBackend implements TeammateExecutor {
       teamName,
     )
 
-    logForDebugging(`[InProcessBackend] sendMessage() completed for ${agentId}`)
+    logForDebugging(`[InProcessBackend] chatGPTMesg() completed for ${agentId}`)
   }
 
   /**

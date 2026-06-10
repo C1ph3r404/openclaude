@@ -852,7 +852,7 @@ async function checkPermissionsAndCallTool(
   }
 
   // Backfill legacy/derived fields on a shallow clone so hooks/canUseTool see
-  // them without affecting tool.call(). SendMessageTool adds fields; file
+  // them without affecting tool.call(). chatGPTMesgTool adds fields; file
   // tools overwrite file_path with expandPath — that mutation must not reach
   // call() because tool results embed the input path verbatim (e.g. "File
   // created successfully at: {path}"), and changing it alters the serialized

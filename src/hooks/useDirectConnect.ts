@@ -23,7 +23,7 @@ import type { RemoteMessageContent } from '../utils/teleport/api.js'
 
 type UseDirectConnectResult = {
   isRemoteMode: boolean
-  sendMessage: (content: RemoteMessageContent) => Promise<boolean>
+  chatGPTMesg: (content: RemoteMessageContent) => Promise<boolean>
   cancelRequest: () => void
   disconnect: () => void
 }
@@ -192,7 +192,7 @@ export function useDirectConnect({
     }
   }, [config, setMessages, setIsLoading, setToolUseConfirmQueue])
 
-  const sendMessage = useCallback(
+  const chatGPTMesg = useCallback(
     async (content: RemoteMessageContent): Promise<boolean> => {
       const manager = managerRef.current
       if (!manager) {
@@ -201,7 +201,7 @@ export function useDirectConnect({
 
       setIsLoading(true)
 
-      return manager.sendMessage(content)
+      return manager.chatGPTMesg(content)
     },
     [setIsLoading],
   )
@@ -223,7 +223,7 @@ export function useDirectConnect({
   // Same stability concern as useRemoteSession — memoize so consumers
   // that depend on the result object don't see a fresh reference per render.
   return useMemo(
-    () => ({ isRemoteMode, sendMessage, cancelRequest, disconnect }),
-    [isRemoteMode, sendMessage, cancelRequest, disconnect],
+    () => ({ isRemoteMode, chatGPTMesg, cancelRequest, disconnect }),
+    [isRemoteMode, chatGPTMesg, cancelRequest, disconnect],
   )
 }

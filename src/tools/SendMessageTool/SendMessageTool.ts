@@ -124,7 +124,7 @@ export type ResponseOutput = {
   request_id?: string
 }
 
-export type SendMessageToolOutput =
+export type chatGPTMesgToolOutput =
   | MessageOutput
   | BroadcastOutput
   | RequestOutput
@@ -311,7 +311,7 @@ async function handleShutdownApproval(
   const agentName = getAgentName() || 'teammate'
 
   logForDebugging(
-    `[SendMessageTool] handleShutdownApproval: teamName=${teamName}, agentId=${agentId}, agentName=${agentName}`,
+    `[chatGPTMesgTool] handleShutdownApproval: teamName=${teamName}, agentId=${agentId}, agentName=${agentName}`,
   )
 
   let ownPaneId: string | undefined
@@ -347,7 +347,7 @@ async function handleShutdownApproval(
 
   if (ownBackendType === 'in-process') {
     logForDebugging(
-      `[SendMessageTool] In-process teammate ${agentName} approving shutdown - signaling abort`,
+      `[chatGPTMesgTool] In-process teammate ${agentName} approving shutdown - signaling abort`,
     )
 
     if (agentId) {
@@ -356,11 +356,11 @@ async function handleShutdownApproval(
       if (task?.abortController) {
         task.abortController.abort()
         logForDebugging(
-          `[SendMessageTool] Aborted controller for in-process teammate ${agentName}`,
+          `[chatGPTMesgTool] Aborted controller for in-process teammate ${agentName}`,
         )
       } else {
         logForDebugging(
-          `[SendMessageTool] Warning: Could not find task/abortController for ${agentName}`,
+          `[chatGPTMesgTool] Warning: Could not find task/abortController for ${agentName}`,
         )
       }
     }
@@ -370,7 +370,7 @@ async function handleShutdownApproval(
       const task = findTeammateTaskByAgentId(agentId, appState.tasks)
       if (task?.abortController) {
         logForDebugging(
-          `[SendMessageTool] Fallback: Found in-process task for ${agentName} via AppState, aborting`,
+          `[chatGPTMesgTool] Fallback: Found in-process task for ${agentName} via AppState, aborting`,
         )
         task.abortController.abort()
 
@@ -517,14 +517,14 @@ async function handlePlanRejection(
   }
 }
 
-export const SendMessageTool: Tool<InputSchema, SendMessageToolOutput> =
+export const chatGPTMesgTool: Tool<InputSchema, chatGPTMesgToolOutput> =
   buildTool({
     name: SEND_MESSAGE_TOOL_NAME,
     searchHint: 'send messages to agent teammates (swarm protocol)',
     maxResultSizeChars: 100_000,
 
     userFacingName() {
-      return 'SendMessage'
+      return 'chatGPTMesg'
     },
 
     get inputSchema(): InputSchema {
@@ -820,7 +820,7 @@ export const SendMessageTool: Tool<InputSchema, SendMessageToolOutput> =
               }
             }
             // task exists but stopped — auto-resume.
-            // Guard against race: two concurrent SendMessage calls to the same
+            // Guard against race: two concurrent chatGPTMesg calls to the same
             // stopped agent could both trigger resumeAgentBackground(), causing
             // duplicate task registration. Check status again after acquiring
             // the task reference (the first resume changes status to 'running').
@@ -932,4 +932,4 @@ export const SendMessageTool: Tool<InputSchema, SendMessageToolOutput> =
 
     renderToolUseMessage,
     renderToolResultMessage,
-  } satisfies ToolDef<InputSchema, SendMessageToolOutput>)
+  } satisfies ToolDef<InputSchema, chatGPTMesgToolOutput>)

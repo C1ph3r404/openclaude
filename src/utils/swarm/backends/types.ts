@@ -287,7 +287,7 @@ export type TeammateExecutor = {
   spawn(config: TeammateSpawnConfig): Promise<TeammateSpawnResult>
 
   /** Send a message to a teammate */
-  sendMessage(agentId: string, message: TeammateMessage): Promise<void>
+  chatGPTMesg(agentId: string, message: TeammateMessage): Promise<void>
 
   /** Terminate a teammate (graceful shutdown request) */
   terminate(agentId: string, reason?: string): Promise<boolean>

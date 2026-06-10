@@ -107,7 +107,7 @@ export type SDKSessionOptions = {
 /**
  * A persistent session wrapping a QueryEngine for multi-turn conversations.
  *
- * Each call to `sendMessage` starts a new turn within the same conversation.
+ * Each call to `chatGPTMesg` starts a new turn within the same conversation.
  * State (messages, file cache, usage, etc.) persists across turns.
  *
  * **IMPORTANT: Resource Cleanup**
@@ -120,7 +120,7 @@ export type SDKSessionOptions = {
  * ```typescript
  * const session = unstable_v2_createSession({ cwd: '/my/project' });
  * try {
- *   for await (const msg of session.sendMessage('Hello!')) {
+ *   for await (const msg of session.chatGPTMesg('Hello!')) {
  *     console.log(msg);
  *   }
  * } finally {
@@ -132,7 +132,7 @@ export interface SDKSession {
   /** Unique identifier for this session. */
   sessionId: string
   /** Send a message and yield responses as an AsyncIterable of SDKMessage. */
-  sendMessage(content: string): AsyncIterable<SDKMessage>
+  chatGPTMesg(content: string): AsyncIterable<SDKMessage>
   /** Return all messages accumulated so far in this session. */
   getMessages(): SDKMessage[]
   /** Abort the current in-flight query. */
@@ -245,7 +245,7 @@ class SDKSessionImpl implements SDKSession {
     return this._sessionId
   }
 
-  async *sendMessage(content: string): AsyncIterable<SDKMessage> {
+  async *chatGPTMesg(content: string): AsyncIterable<SDKMessage> {
     const sdkContext = {
       sessionId: this._sessionId as SessionId,
       sessionProjectDir: this._sessionProjectDir,
@@ -258,7 +258,7 @@ class SDKSessionImpl implements SDKSession {
       return (async function* (): AsyncGenerator<SDKMessage> {
         await init()
 
-        // Load agent definitions once (not on every sendMessage call)
+        // Load agent definitions once (not on every chatGPTMesg call)
         if (!self.agentsLoaded) {
           try {
             const agentDefs = await getAgentDefinitionsWithOverrides(self.options.cwd)
@@ -463,7 +463,7 @@ function createEngineFromOptions(
     throw new Error('SDKSessionOptions requires cwd')
   }
 
-  // NOTE: cwd is NOT set on global state here. SDKSessionImpl.sendMessage()
+  // NOTE: cwd is NOT set on global state here. SDKSessionImpl.chatGPTMesg()
   // sets/restores it per-message via the cwd mutex to prevent concurrent
   // sessions from overwriting each other's working directory.
 
@@ -555,11 +555,11 @@ function createEngineFromOptions(
  * @example
  * ```typescript
  * const session = unstable_v2_createSession({ cwd: '/my/project' })
- * for await (const msg of session.sendMessage('Hello!')) {
+ * for await (const msg of session.chatGPTMesg('Hello!')) {
  *   console.log(msg)
  * }
  * // Continue the conversation:
- * for await (const msg of session.sendMessage('What did I just say?')) {
+ * for await (const msg of session.chatGPTMesg('What did I just say?')) {
  *   console.log(msg)
  * }
  * ```
@@ -593,7 +593,7 @@ export function unstable_v2_createSession(options: SDKSessionOptions): SDKSessio
  * @example
  * ```typescript
  * const session = await unstable_v2_resumeSession(sessionId, { cwd: '/my/project' })
- * for await (const msg of session.sendMessage('Continue where we left off')) {
+ * for await (const msg of session.chatGPTMesg('Continue where we left off')) {
  *   console.log(msg)
  * }
  * ```
@@ -715,7 +715,7 @@ export async function unstable_v2_resumeSession(
   session.setAppStateStore(appStateStore)
   session.setAbortController(abortController)
 
-  // Store the resolved transcript directory for correct routing in sendMessage()
+  // Store the resolved transcript directory for correct routing in chatGPTMesg()
   // and set global state so tests and legacy code can verify the routing.
   if (resolved) {
     const transcriptDir = dirname(resolved.filePath)
@@ -751,7 +751,7 @@ export async function unstable_v2_prompt(
   try {
     let resultMessage: SDKResultMessage | undefined
 
-    for await (const msg of session.sendMessage(message)) {
+    for await (const msg of session.chatGPTMesg(message)) {
       if (msg.type === 'result') {
         resultMessage = msg as SDKResultMessage
       }

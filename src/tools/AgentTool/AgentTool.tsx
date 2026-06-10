@@ -91,7 +91,7 @@ const baseInputSchema = lazySchema(() => z.object({
 const fullInputSchema = lazySchema(() => {
   // Multi-agent parameters
   const multiAgentInputSchema = z.object({
-    name: z.string().optional().describe('Name for the spawned agent. Makes it addressable via SendMessage({to: name}) while running.'),
+    name: z.string().optional().describe('Name for the spawned agent. Makes it addressable via chatGPTMesg({to: name}) while running.'),
     team_name: z.string().optional().describe('Team name for spawning. Uses current team context if omitted.'),
     mode: permissionModeSchema().optional().describe('Permission mode for spawned teammate (e.g., "plan" to require plan approval).')
   });
@@ -298,11 +298,11 @@ export const AgentTool = buildTool({
         rawTeammateModel === undefined
           ? undefined
           : getAgentModel(
-              agentDef?.model,
-              toolUseContext.options.mainLoopModel,
-              model,
-              permissionMode
-            );
+            agentDef?.model,
+            toolUseContext.options.mainLoopModel,
+            model,
+            permissionMode
+          );
       const result = await spawnTeammate({
         name,
         prompt,
@@ -726,9 +726,9 @@ export const AgentTool = buildTool({
         toolUseId: toolUseContext.toolUseId
       });
 
-      // Register name → agentId for SendMessage routing. Post-registerAsyncAgent
+      // Register name → agentId for chatGPTMesg routing. Post-registerAsyncAgent
       // so we don't leave a stale entry if spawn fails. Sync agents skipped —
-      // coordinator is blocked, so SendMessage routing doesn't apply.
+      // coordinator is blocked, so chatGPTMesg routing doesn't apply.
       if (name) {
         rootSetAppState(prev => {
           const next = new Map(prev.agentNameRegistry);
@@ -1356,7 +1356,7 @@ The agent is now running and will receive instructions via mailbox.`
       };
     }
     if (data.status === 'async_launched') {
-      const prefix = `Async agent launched successfully.\nagentId: ${data.agentId} (internal ID - do not mention to user. Use SendMessage with to: '${data.agentId}' to continue this agent.)\nThe agent is working in the background. You will be notified automatically when it completes.`;
+      const prefix = `Async agent launched successfully.\nagentId: ${data.agentId} (internal ID - do not mention to user. Use chatGPTMesg with to: '${data.agentId}' to continue this agent.)\nThe agent is working in the background. You will be notified automatically when it completes.`;
       const instructions = data.canReadOutputFile ? `DO NOT DUPLICATE this agent's work, DO NOT SPAWN ANOTHER AGENT FOR SAME TASK — avoid working with the same files or topics it is using. Briefly tell the user what you launched and end your response.` : `Briefly tell the user what you launched and end your response. Do not generate any other text — agent results will arrive in a subsequent message.`;
       const text = `${prefix}\n${instructions}`;
       return {
@@ -1379,7 +1379,7 @@ The agent is now running and will receive instructions via mailbox.`
         type: 'text' as const,
         text: '(Subagent completed but returned no output.)'
       }];
-      // One-shot built-ins (Explore, Plan) are never continued via SendMessage
+      // One-shot built-ins (Explore, Plan) are never continued via chatGPTMesg
       // — the agentId hint and <usage> block are dead weight (~135 chars ×
       // 34M Explore runs/week ≈ 1-2 Gtok/week). Telemetry doesn't parse this
       // block (it uses logEvent in finalizeAgentTool), so dropping is safe.
@@ -1396,7 +1396,7 @@ The agent is now running and will receive instructions via mailbox.`
         type: 'tool_result',
         content: [...contentOrMarker, {
           type: 'text',
-          text: `agentId: ${data.agentId} (use SendMessage with to: '${data.agentId}' to continue this agent)${worktreeInfoText}
+          text: `agentId: ${data.agentId} (use chatGPTMesg with to: '${data.agentId}' to continue this agent)${worktreeInfoText}
 <usage>total_tokens: ${data.totalTokens}
 tool_uses: ${data.totalToolUseCount}
 duration_ms: ${data.totalDurationMs}</usage>`

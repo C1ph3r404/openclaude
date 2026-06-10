@@ -3641,7 +3641,7 @@ export function REPL({
       setMessages(prev => [...prev, userMessage]);
 
       // Send to remote session
-      await activeRemote.sendMessage(remoteContent, {
+      await activeRemote.chatGPTMesg(remoteContent, {
         uuid: userMessage.uuid
       });
       return;

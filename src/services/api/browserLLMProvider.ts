@@ -3,6 +3,8 @@
  * Handles communication with BrowserLLM server for chat management
  */
 
+import { logForDebugging } from "src/utils/debug";
+
 
 interface BrowserLLMConfig {
     baseUrl: string;
@@ -126,6 +128,37 @@ export async function newChatSession(): Promise<{ success: boolean; chatId?: str
 }
 
 /**
+ * Set the current agentType for main session 
+ */
+export async function setAgentType(agentType: string): Promise<{ success: boolean; error?: string }> {
+    logForDebugging(`[BrowserLLM Provider] Setting agent type to: ${agentType}`);
+    if (!config) {
+        return { success: false, error: 'BrowserLLM provider not initialized' };
+    }
+
+    try {
+        const response = await fetch(`${config.baseUrl}/set-main-agentType`, {
+            method: 'POST',
+            body: JSON.stringify({ agentType }),
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+        logForDebugging(`[BrowserLLM Provider] Received response for set-main-agentType: ${response.status} ${response.statusText}`);
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            return {
+                success: false,
+                error: errorData.message || `HTTP ${response.status}`,
+            };
+        }
+        return { success: true };
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return { success: false, error: `Failed to set agent type: ${errorMessage}` };
+    }
+}
+/**
  * Set the chat ID to resume a specific ChatGPT conversation
  */
 export async function setChatId(chatId: string): Promise<{ success: boolean; error?: string }> {
@@ -139,7 +172,7 @@ export async function setChatId(chatId: string): Promise<{ success: boolean; err
         const timeoutId = setTimeout(() => controller.abort(), 30000);
 
         try {
-            const response = await fetch(`${config.baseUrl}/set-chat-id`, {
+            const response = await fetch(`http://localhost:3579/set-chat-id`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
